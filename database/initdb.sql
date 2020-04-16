@@ -1,8 +1,8 @@
-CREATE DATABASE users;
+CREATE DATABASE auth;
 
-USE users;
+USE auth;
 
 CREATE TABLE Users (
-    username VARCHAR(20),
-    user_password VARCHAR(20)
+    username text primary key,
+    hashedPassword text
 );

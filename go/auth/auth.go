@@ -14,7 +14,6 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		loginUser(w, r)
-		io.WriteString(w, "login here")
 	case "POST":
 		registerUser(w, r)
 		return
@@ -33,8 +32,23 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//compare password
-	result := database.DB.QueryRow("select hashedPassword from users where username=?", credentials.Username)
+	var hashedPassword string
+	err = database.DB.QueryRow("select hashedPassword from users where username=?", credentials.Username).Scan(&hashedPassword)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
 
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	io.WriteString(w, "logged in!")
 }
 
 func registerUser(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +58,13 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&newUser)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	//check if user exists
+	rows, err := database.DB.Query("select username from users where username=?", newUser.Username)
+	if rows.Next() {
+		http.Error(w, errors.New("Username already taken").Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -57,7 +78,7 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	//put credentials into the database
 	_, err = database.DB.Query("INSERT INTO users(username, hashedPassword) VALUES (?,?)", newUser.Username, string(hashedPassword))
 	if err != nil {
-		http.Error(w, errors.New("error hashing password").Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }

@@ -2,7 +2,7 @@ CREATE DATABASE auth;
 
 USE auth;
 
-CREATE TABLE Users (
-    username text primary key,
-    hashedPassword text
+CREATE TABLE users (
+    username VARCHAR(20),
+    hashedPassword VARCHAR(60)
 );

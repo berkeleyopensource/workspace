@@ -14,12 +14,13 @@ func main() {
 	mux := http.NewServeMux()
 
 	//database
-	database.DB, err := sql.Open("mysql", "root:password@tcp(localhost:3306)/users")
+	db, err := sql.Open("mysql", "root:password@tcp(localhost:3306)/auth")
+	database.DB = db
 	//db, err := sql.Open("mysql", "admin:admin@/users")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	defer db.Close()
+	defer database.DB.Close()
 
 	//register routes
 	registerAllRoutes(mux)

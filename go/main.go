@@ -14,7 +14,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	//database
-	db, err := sql.Open("mysql", "root:password@tcp(localhost:3306)/auth")
+	db, err := sql.Open("mysql", "root:password@tcp(172.28.1.2:3306)/auth")
 	database.DB = db
 	//db, err := sql.Open("mysql", "admin:admin@/users")
 	if err != nil {

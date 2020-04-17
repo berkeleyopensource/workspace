@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+    go:
+        container_name: workspace-go
+        build: ./go
+        ports:
+            - "8080:8080"
+        networks:
+            workspacenet:
+                ipv4_address: 172.28.1.1
+    mysql:
+        container_name: workspace-users
+        build: ./database
+        ports:
+            - "3306:3306"
+        networks:
+            workspacenet:
+                ipv4_address: 172.28.1.2
+
+networks:
+    workspacenet:
+        ipam:
+            driver: default
+            config:
+                - subnet: 172.28.0.0/16

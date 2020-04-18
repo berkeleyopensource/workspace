@@ -18,10 +18,12 @@
     "typescript": "~3.7.2"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "react-start": "react-scripts start",
+    "react-build": "react-scripts build",
+    "react-eject": "react-scripts eject",
+    "react-test": "react-scripts test",
+    "build": "yarn react-build && yarn electron-builder",
+    "start": "cross-env BROWSER=none npm run react-start electron ."
   },
   "eslintConfig": {
     "extends": "react-app"

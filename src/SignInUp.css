@@ -1,0 +1,90 @@
+.SignInUp {
+  min-height: 100vh;
+  font-size: 1em;
+  background-color: #fffefc;
+  margin: auto;
+}
+
+.SignInUp nav {
+  margin: auto;
+  padding: 1em;
+  max-width: 1200px;
+}
+
+.SignInUp nav h2 {
+  font-size: 1.5em;
+  color: #000;
+}
+
+.SignInUp form {
+  max-width: 400px;
+  margin: auto;
+  margin-top: 10vh;
+  padding: 1em;
+}
+
+.SignInUp form .input-group {
+  margin: 0.5em 0em;
+}
+
+.SignInUp form .input-title {
+  font-weight: 600;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  color: rgba(55, 55, 55, 0.5);
+  letter-spacing: 0.05em;
+}
+
+.SignInUp form input {
+  margin: 0.25em 0em;
+  padding: 0.5em;
+  height: 1.5em;
+  width: -webkit-fill-available;
+  outline: 0;
+  font-size: 1em;
+  border-radius: 3px;
+  border: none;
+  background-color: rgba(0, 0, 0, .05);
+  transition: box-shadow .2s ease-in-out;
+  box-shadow: rgba(0, 0, 0, .05) 0px 0px 0px 1px inset;
+  box-sizing: content-box;
+}
+
+.SignInUp form input:focus {
+  box-shadow: rgba(46, 170, 220, 0.7) 0px 0px 0px 1px inset, rgba(46, 170, 220, 0.4) 0px 0px 0px 2px !important;
+}
+
+.SignInUp form .button-primary {
+  width: 100%;
+  padding: 1em;
+  cursor: pointer;
+  color: rgb(46, 170, 220);
+  border: none;
+  border-radius: 3px;
+  background-color: rgba(46, 170, 220, 0.2);
+  box-shadow: rgba(46, 170, 220, 0.7) 0px 0px 0px 1px inset;
+  transition: background-color .2s ease-in-out;
+  font-weight: 600;
+  font-size: 0.8em;
+}
+
+.SignInUp form .button-primary:hover, .SignInUp form .button-primary:focus {
+  background-color: rgba(46, 170, 220, 0.35);
+  outline: 0;
+}
+
+.SignInUp form .input-group:last-of-type {
+  color: rgba(55, 55, 55, 0.5);
+  font-size: 0.75em;
+  transition: color .2s ease-in-out;
+}
+
+.SignInUp form .input-group:last-of-type a {
+  color: rgba(55, 55, 55, 0.8);
+  outline: 0;
+}
+
+.SignInUp form .input-group:last-of-type a:hover, .SignInUp form .input-group:last-of-type a:focus {
+  color: rgb(46, 170, 220);
+}
+

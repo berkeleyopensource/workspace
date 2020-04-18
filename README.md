@@ -1,6 +1,6 @@
 # WorkSpace
 
-WorkSpace is a collaboration and productivity service that allows seamless sharing of files and work "contexts" between people and/or devices.
+WorkSpace is a collaboration and productivity tool that allows seamless sharing of files and work "contexts" between people and/or devices.
 
 ## Usage Example
 

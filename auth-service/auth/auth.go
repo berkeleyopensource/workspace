@@ -33,7 +33,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 
 	//compare password
 	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where username=?", credentials.Username).Scan(&hashedPassword)
+	err = database.DB.QueryRow("select hashedPassword from users where email=?", credentials.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -62,9 +62,9 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//check if user exists
-	rows, err := database.DB.Query("select username from users where username=?", newUser.Username)
+	rows, err := database.DB.Query("select email from users where email=?", newUser.Email)
 	if rows.Next() {
-		http.Error(w, errors.New("Username already taken").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("Email already exists").Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -76,7 +76,7 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//put credentials into the database
-	_, err = database.DB.Query("INSERT INTO users(username, hashedPassword) VALUES (?,?)", newUser.Username, string(hashedPassword))
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (?,?)", newUser.Email, string(hashedPassword))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

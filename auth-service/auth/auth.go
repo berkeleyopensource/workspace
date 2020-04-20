@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/eecscord/workspace/go/database"
+	"github.com/eecscord/workspace/auth-service/database"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"net/http"

@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"github.com/eecscord/workspace/go/auth"
-	"github.com/eecscord/workspace/go/database"
+	"github.com/eecscord/workspace/auth-service/auth"
+	"github.com/eecscord/workspace/auth-service/database"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"

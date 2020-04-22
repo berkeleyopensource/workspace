@@ -32,7 +32,14 @@
   font-size: 0.7em;
   text-transform: uppercase;
   color: rgba(55, 55, 55, 0.5);
+  transition: color .2s ease-in-out;
   letter-spacing: 0.05em;
+}
+
+.SignInUp form .input-title span {
+  text-transform: none;
+  letter-spacing: 0em;
+  font-style: italic;
 }
 
 .SignInUp form input {
@@ -86,5 +93,14 @@
 
 .SignInUp form .input-group:last-of-type a:hover, .SignInUp form .input-group:last-of-type a:focus {
   color: rgb(46, 170, 220);
+}
+
+
+.SignInUp form .input-error .input-title {
+  color: rgb(235, 87, 87);
+}
+
+.SignInUp form .input-error input {
+  box-shadow: rgba(235, 87, 87, 0.7) 0px 0px 0px 1px inset, rgba(235, 87, 87, 0.4) 0px 0px 0px 2px !important;
 }
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import App from './App';
+
 import SignIn from "./SignIn";
 import SignUp from "./SignUp";
 import * as serviceWorker from './serviceWorker';
@@ -14,6 +14,7 @@ ReactDOM.render(
       <Route path="/" exact component={ SignIn } />
       <Route path="/signin" component={ SignIn } />
       <Route path="/signup" component={ SignUp } />
+      <Route path="/channels/:channel" component={ SignUp } />
     </div>
   </HashRouter>,
   document.getElementById('root')

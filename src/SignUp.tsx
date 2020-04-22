@@ -1,6 +1,8 @@
 import React from 'react';
 import './SignInUp.css';
 
+import { Link } from 'react-router-dom';
+
 function App() {
   return (
     <div className="SignInUp">
@@ -21,8 +23,8 @@ function App() {
           <button className="button-primary" type="submit"><div>Continue</div></button>
         </div>
         <div className="input-group">
-          <div><a href="/reset">Forgot your password?</a></div>
-          <div>Already have an account? <a href="/signup">Sign in.</a></div>
+          <div><Link to="/reset">Forgot your password?</Link></div>
+          <div>Already have an account? <Link to="/signin">Sign in.</Link></div>
         </div>
       </form>
     </div>

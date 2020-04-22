@@ -6,10 +6,16 @@ import SignIn from "./SignIn";
 import SignUp from "./SignUp";
 import * as serviceWorker from './serviceWorker';
 
+import { HashRouter, Route } from "react-router-dom";
+
 ReactDOM.render(
-  <React.StrictMode>
-    <SignUp />
-  </React.StrictMode>,
+  <HashRouter>
+    <div>
+      <Route path="/" exact component={ SignIn } />
+      <Route path="/signin" component={ SignIn } />
+      <Route path="/signup" component={ SignUp } />
+    </div>
+  </HashRouter>,
   document.getElementById('root')
 );
 

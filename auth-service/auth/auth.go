@@ -21,11 +21,11 @@ var mg *mailgun.MailgunImpl
 
 func RegisterRoutes(mux *http.ServeMux) error {
 
-	//initialize routes
+	// Initialize routes
 	mux.HandleFunc("/api/signin", handleSignIn)
 	mux.HandleFunc("/api/signup", handleSignUp)
 
-	//load mailgun credentials
+	// Load mailgun credentials
 	err := godotenv.Load()
 	if err != nil {
 		return err
@@ -39,6 +39,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 }
 
 func handleSignIn(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
 		userSignIn(w, r)
@@ -50,6 +51,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSignUp(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
 		userSignUp(w, r)
@@ -114,7 +116,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//send email
+	// Send verification email
 	subject := "User Registration"
 	body := "User registration, but verification required"
 	err = SendEmail(credentials.Email, subject, body)

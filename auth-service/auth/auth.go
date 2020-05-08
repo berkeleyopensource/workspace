@@ -16,7 +16,7 @@ import (
 )
 
 var mailgunDomain, mailgunAPIKey string
-var mailgunSender = fmt.Sprintf("Workspace Bot <mailgun@%s>", mailgunDomain)
+var mailgunSender string
 var mg *mailgun.MailgunImpl
 
 func RegisterRoutes(mux *http.ServeMux) error {
@@ -32,6 +32,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	}
 	mailgunDomain = os.Getenv("MAILGUN_DOMAIN")
 	mailgunAPIKey = os.Getenv("MAILGUN_KEY")
+	mailgunSender = fmt.Sprintf("Workspace Bot <mailgun@%s>", mailgunDomain)
 	mg = mailgun.NewMailgun(mailgunDomain, mailgunAPIKey)
 
 	return nil
@@ -122,6 +123,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err.Error())
 		return
 	}
+
 	// Store (unverified) credentials into the database
 	// implement following line after database has been edited
 	//_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified) VALUES (@email,@hashedPassword, @verified)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)), sql.Named("verified", 0))

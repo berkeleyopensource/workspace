@@ -32,7 +32,6 @@ func main() {
 	//database)
 	connString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;",
 		server, user, password, port, cloudDatabase)
-	fmt.Println(connString)
 	// Create connection pool
 	database.DB, err = sql.Open("sqlserver", connString)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"github.com/eecscord/workspace/auth-service/database"
 	"golang.org/x/crypto/bcrypt"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -33,7 +34,7 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 
 	//compare password
 	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=?", credentials.Email).Scan(&hashedPassword)
+	err = database.DB.QueryRow("select hashedPassword from users where email=@email", sql.Named("email", credentials.Email)).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -57,13 +58,15 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	newUser := User{}
 	err := json.NewDecoder(r.Body).Decode(&newUser)
 	if err != nil {
+		log.Fatal(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	//check if user exists
-	rows, err := database.DB.Query("select email from users where email=?", newUser.Email)
-	if rows.Next() {
+	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = @email", sql.Named("email", newUser.Email))
+	var email string
+	if err = rows.Scan(&email); err != sql.ErrNoRows {
 		http.Error(w, errors.New("Email already exists").Error(), http.StatusBadRequest)
 		return
 	}
@@ -71,12 +74,15 @@ func registerUser(w http.ResponseWriter, r *http.Request) {
 	//hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
 	if err != nil {
+
 		http.Error(w, errors.New("error hashing password").Error(), http.StatusInternalServerError)
+		log.Fatal(err.Error())
+
 		return
 	}
 
 	//put credentials into the database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (?,?)", newUser.Email, string(hashedPassword))
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (@email,@hashedPassword)", sql.Named("email", newUser.Email), sql.Named("hashedPassword", string(hashedPassword)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

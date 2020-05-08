@@ -8,4 +8,6 @@ RUN go mod download
 
 RUN go build -o main .
 
-CMD ["./main"]
+EXPOSE 8080
+
+ENTRYPOINT [ "./main" ]

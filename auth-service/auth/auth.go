@@ -11,28 +11,44 @@ import (
 	"net/http"
 )
 
-func userHandler(w http.ResponseWriter, r *http.Request) {
+func RegisterRoutes(mux *http.ServeMux) error {
+	mux.HandleFunc("/api/signin", handleSignIn)
+	mux.HandleFunc("/api/signup", handleSignUp)
+	return nil
+}
+
+func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
-	case "GET":
-		loginUser(w, r)
-	case "POST":
-		registerUser(w, r)
-		return
-	default:
-		http.Error(w, errors.New("bad request").Error(), http.StatusBadRequest)
-		return
+		case "POST":
+			userSignIn(w, r)
+			return
+		default:
+		  http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+      return
 	}
 }
 
-func loginUser(w http.ResponseWriter, r *http.Request) {
+func handleSignUp(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+		case "POST":
+			userSignUp(w, r)
+			return
+		default:
+		  http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+      return
+	}
+}
+
+func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := User{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Fatal(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	//compare password
+	// Check if hashed password matches the one corresponding to the email.
 	var hashedPassword string
 	err = database.DB.QueryRow("select hashedPassword from users where email=@email", sql.Named("email", credentials.Email)).Scan(&hashedPassword)
 	if err != nil {
@@ -52,46 +68,37 @@ func loginUser(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "logged in!")
 }
 
-func registerUser(w http.ResponseWriter, r *http.Request) {
-
-	//get info from json
-	newUser := User{}
-	err := json.NewDecoder(r.Body).Decode(&newUser)
+func userSignUp(w http.ResponseWriter, r *http.Request) {
+	credentials := User{}
+	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
 		log.Fatal(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	//check if user exists
-	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = @email", sql.Named("email", newUser.Email))
+	// Check if email exists.
+	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = @email", sql.Named("email", credentials.Email))
 	var email string
 	if err = rows.Scan(&email); err != sql.ErrNoRows {
-		http.Error(w, errors.New("Email already exists").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("Email already exists.").Error(), http.StatusBadRequest)
 		return
 	}
 
-	//hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.Password), bcrypt.DefaultCost)
+	// Hash the password using bcrypt.
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 	if err != nil {
-
-		http.Error(w, errors.New("error hashing password").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error hashing password.").Error(), http.StatusInternalServerError)
 		log.Fatal(err.Error())
-
 		return
 	}
 
-	//put credentials into the database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (@email,@hashedPassword)", sql.Named("email", newUser.Email), sql.Named("hashedPassword", string(hashedPassword)))
+	// Store credentials into the database.
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (@email,@hashedPassword)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
 
-func RegisterRoutes(mux *http.ServeMux) error {
 
-	mux.HandleFunc("/auth/user", userHandler)
-
-	return nil
-}

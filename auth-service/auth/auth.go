@@ -40,7 +40,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func userSignIn(w http.ResponseWriter, r *http.Request) {
-	credentials := User{}
+	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -69,7 +69,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func userSignUp(w http.ResponseWriter, r *http.Request) {
-	credentials := User{}
+	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -100,5 +100,3 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
-

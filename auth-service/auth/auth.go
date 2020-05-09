@@ -4,10 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/eecscord/workspace/auth-service/database"
 	"github.com/joho/godotenv"
-	"github.com/mailgun/mailgun-go/v4"
+	"github.com/sendgrid/sendgrid-go"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 	"log"
@@ -15,9 +15,11 @@ import (
 	"os"
 )
 
-var mailgunDomain, mailgunAPIKey string
-var mailgunSender string
-var mg *mailgun.MailgunImpl
+var (
+	sendgridKey    string
+	sendgridClient *sendgrid.Client
+	defaultSender  = mail.NewEmail("Workspace Bot", "opensourceworkspacebot@gmail.com")
+)
 
 func RegisterRoutes(mux *http.ServeMux) error {
 
@@ -25,15 +27,14 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signin", handleSignIn)
 	mux.HandleFunc("/api/signup", handleSignUp)
 
-	// Load mailgun credentials
+	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
 		return err
 	}
-	mailgunDomain = os.Getenv("MAILGUN_DOMAIN")
-	mailgunAPIKey = os.Getenv("MAILGUN_KEY")
-	mailgunSender = fmt.Sprintf("Workspace Bot <mailgun@%s>", mailgunDomain)
-	mg = mailgun.NewMailgun(mailgunDomain, mailgunAPIKey)
+
+	sendgridKey = os.Getenv("SENDGRID_KEY")
+	sendgridClient = sendgrid.NewSendClient(sendgridKey)
 
 	return nil
 }

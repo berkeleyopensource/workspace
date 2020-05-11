@@ -3,10 +3,10 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/eecscord/workspace/auth-service/auth"
 	"github.com/eecscord/workspace/auth-service/database"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"log"
 	"net/http"
 	"os"
@@ -20,23 +20,28 @@ func main() {
 	}
 
 	//database credentials
-	var server = os.Getenv("SERVER")
-	var port = 1433
-	var user = os.Getenv("USER")
-	var password = os.Getenv("PASSWORD")
-	var cloudDatabase = os.Getenv("CLOUD_DATABASE")
+	var (
+		host     = "localhost"
+		port     = 5432
+		user     = "postgres"
+		password = os.Getenv("DB_PASSWORD")
+		dbname   = "calhounio_demo"
+	)
 
 	//create http mux
 	mux := http.NewServeMux()
 
 	//database)
-	connString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;",
-		server, user, password, port, cloudDatabase)
-	// Create connection pool
-	database.DB, err = sql.Open("sqlserver", connString)
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	database.DB, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
-		log.Fatal("Error creating connection pool: ", err.Error())
+		panic(err)
 	}
+	defer database.DB.Close()
+	fmt.Println("Successfully connected!")
 
 	//register routes
 	registerAllRoutes(mux)

@@ -1,5 +1,3 @@
-FROM mysql:latest
-
-ENV MYSQL_ROOT_PASSWORD password
+FROM postgres:latestdock 
 
 COPY initdb.sql /docker-entrypoint-initdb.d/

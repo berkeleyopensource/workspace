@@ -26,7 +26,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	// Initialize routes
 	mux.HandleFunc("/api/signin", handleSignIn)
 	mux.HandleFunc("/api/signup", handleSignUp)
-
+	mux.HandleFunc("/api/reset", handleResetPassword)
 	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
@@ -56,6 +56,18 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		userSignUp(w, r)
+		return
+	default:
+		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func handleResetPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
+	switch r.Method {
+	case "POST":
+		userResetPassword(w, r)
 		return
 	default:
 		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
@@ -135,4 +147,36 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func userResetPassword(w http.ResponseWriter, r *http.Request) {
+
+	//Obtain user credentials
+	credentials := Credentials{}
+	err := json.NewDecoder(r.Body).Decode(&credentials)
+	if err != nil {
+		log.Fatal(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if hashed password matches the one corresponding to the email
+	var hashedPassword string
+	err = database.DB.QueryRow("select hashedPassword from users where email=@email", sql.Named("email", credentials.Email)).Scan(&hashedPassword)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	//check if a token already exists in the database
+	
 }

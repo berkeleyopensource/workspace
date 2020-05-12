@@ -25,7 +25,7 @@ func main() {
 		port     = 5432
 		user     = "postgres"
 		password = os.Getenv("DB_PASSWORD")
-		dbname   = "calhounio_demo"
+		dbname   = "auth"
 	)
 
 	//create http mux
@@ -41,7 +41,12 @@ func main() {
 		panic(err)
 	}
 	defer database.DB.Close()
-	fmt.Println("Successfully connected!")
+
+	//create auth database
+	database.DB.Exec(`CREATE TABLE IF NOT EXISTS users (
+		email VARCHAR(320),
+		hashedPassword VARCHAR(60)
+	);`)
 
 	//register routes
 	registerAllRoutes(mux)

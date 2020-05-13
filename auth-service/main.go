@@ -21,7 +21,7 @@ func main() {
 
 	//database credentials
 	var (
-		host     = "localhost"
+		host     = "172.28.1.2"
 		port     = 5432
 		user     = "postgres"
 		password = os.Getenv("DB_PASSWORD")
@@ -42,11 +42,11 @@ func main() {
 	}
 	defer database.DB.Close()
 
-	//create auth database
-	database.DB.Exec(`CREATE TABLE IF NOT EXISTS users (
-		email VARCHAR(320),
-		hashedPassword VARCHAR(60)
-	);`)
+	err = database.InitializeUsersTable()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("connected and created tables")
 
 	//register routes
 	registerAllRoutes(mux)

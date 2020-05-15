@@ -18,7 +18,7 @@ import (
 var (
 	sendgridKey    string
 	sendgridClient *sendgrid.Client
-	defaultSender  = mail.NewEmail("Workspace Bot", "opensourceworkspacebot@gmail.com")
+	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
 )
 
 func RegisterRoutes(mux *http.ServeMux) error {
@@ -86,7 +86,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 
 	// Check if hashed password matches the one corresponding to the email
 	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=@email", sql.Named("email", credentials.Email)).Scan(&hashedPassword)
+	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -114,7 +114,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if email exists
-	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = @email", sql.Named("email", credentials.Email))
+	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = $1", credentials.Email)
 	var email string
 	if err = rows.Scan(&email); err != sql.ErrNoRows {
 		http.Error(w, errors.New("Email already exists").Error(), http.StatusBadRequest)
@@ -142,7 +142,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Store (unverified) credentials into the database
 	// implement following line after database has been edited
 	//_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified) VALUES (@email,@hashedPassword, @verified)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)), sql.Named("verified", 0))
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES (@email,@hashedPassword)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)))
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES ($1,$2)", credentials.Email, string(hashedPassword))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -162,7 +162,7 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Check if hashed password matches the one corresponding to the email
 	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=@email", sql.Named("email", credentials.Email)).Scan(&hashedPassword)
+	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -178,5 +178,5 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//check if a token already exists in the database
-	
+
 }

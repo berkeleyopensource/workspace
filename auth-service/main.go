@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/eecscord/workspace/auth-service/auth"
 	"github.com/eecscord/workspace/auth-service/database"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -19,34 +21,15 @@ func main() {
 		log.Fatal("couldn't load env file")
 	}
 
-	//database credentials
-	var (
-		host     = "172.28.1.2"
-		port     = 5432
-		user     = "postgres"
-		password = os.Getenv("DB_PASSWORD")
-		dbname   = "auth"
-	)
-
 	//create http mux
 	mux := http.NewServeMux()
 
 	//database)
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-
-	database.DB, err = sql.Open("postgres", psqlInfo)
+	err = initializeDB()
 	if err != nil {
 		panic(err)
 	}
 	defer database.DB.Close()
-
-	err = database.InitializeUsersTable()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("connected and created tables")
 
 	//register routes
 	registerAllRoutes(mux)
@@ -54,6 +37,41 @@ func main() {
 	//start the server
 	http.ListenAndServe(":80", mux)
 
+}
+
+func initializeDB() error {
+	//database credentials
+	var (
+		host     = "172.28.1.1"
+		port     = 5432
+		user     = "postgres"
+		password = os.Getenv("DB_PASSWORD")
+		dbname   = "auth"
+		err      error
+		tries    = 0
+	)
+
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+
+	database.DB, err = sql.Open("postgres", psqlInfo)
+	for ; err != nil && tries < 5; tries++ {
+		time.Sleep(5 * time.Second)
+		fmt.Println("retrying")
+		database.DB, err = sql.Open("postgres", psqlInfo)
+	}
+	if err != nil {
+		return errors.New("couldnt connect to db")
+	}
+
+	err = database.InitializeUsersTable()
+	if err != nil {
+		return errors.New("error initializing errors table")
+	}
+	fmt.Println("connected and created tables")
+
+	return nil
 }
 
 func registerAllRoutes(mux *http.ServeMux) {

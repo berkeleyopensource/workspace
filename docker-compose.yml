@@ -3,6 +3,8 @@ version: '3'
 services:
     postgres:
         container_name: workspace-users
+        volumes:
+            - db-data:/var/lib/postgresql/data
         env_file: 
             ./database/.env
         build: ./database
@@ -28,3 +30,7 @@ networks:
             driver: default
             config:
                 - subnet: 172.28.0.0/16
+
+volumes:
+    db-data:
+        driver: local

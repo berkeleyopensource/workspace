@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/eecscord/workspace/auth-service/database"
 	"github.com/joho/godotenv"
 	"github.com/sendgrid/sendgrid-go"
@@ -20,6 +23,21 @@ var (
 	sendgridClient *sendgrid.Client
 	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
 )
+
+const (
+	tokenSize = 128
+)
+
+func generateRandomBytes() ([]byte, error) {
+	token := make([]byte, tokenSize)
+	_, err := rand.Read(token)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return nil, err
+	}
+
+	return token, nil
+}
 
 func RegisterRoutes(mux *http.ServeMux) error {
 
@@ -129,6 +147,15 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store (unverified) credentials into the database
+	// implement following line after database has been edited
+	//_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified) VALUES (@email,@hashedPassword, @verified)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)), sql.Named("verified", 0))
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken) VALUES ($1,$2, FALSE, NULL)", credentials.Email, string(hashedPassword))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// Send verification email
 	subject := "User Registration"
 	body := "User registration, but verification required"
@@ -136,15 +163,6 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)
 		log.Fatal(err.Error())
-		return
-	}
-
-	// Store (unverified) credentials into the database
-	// implement following line after database has been edited
-	//_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified) VALUES (@email,@hashedPassword, @verified)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)), sql.Named("verified", 0))
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword) VALUES ($1,$2)", credentials.Email, string(hashedPassword))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 }
@@ -170,6 +188,7 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
@@ -177,6 +196,30 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//check if a token already exists in the database
+	//update previous token previously existing token
+	token, err := generateRandomBytes()
+	base64Token := base64.StdEncoding.EncodeToString(token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
+	_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", base64Token, credentials.Email)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	}
+
+	// Send token to user
+	fmt.Println("token: ", token)
+	fmt.Println("base64 token: ", base64Token)
+	subject := fmt.Sprintf("Reset token for user: %s", credentials.Email)
+	body := fmt.Sprintf("Reset Token: %s", base64Token)
+	err = SendEmail(credentials.Email, subject, body)
+	if err != nil {
+		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)
+		log.Fatal(err.Error())
+		return
+	}
+
+	return
 }

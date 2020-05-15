@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 )
 
 var (
@@ -11,13 +12,17 @@ var (
 func InitializeUsersTable() error {
 
 	//create auth database
-	_, err := DB.Exec(`CREATE TABLE IF NOT EXISTS users (
+	_, err := DB.Exec(`CREATE TABLE users (
 			email VARCHAR(320),
-			hashedPassword VARCHAR(60)
-		);`)
+			hashedPassword TEXT,
+			verified boolean,
+			resetToken TEXT
+		)`)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		return err
 	}
+	fmt.Println("query executed")
 
 	return nil
 }

@@ -2,21 +2,30 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 
-import SignIn from "./SignIn";
-import SignUp from "./SignUp";
+import SignIn from "./views/SignIn";
+import SignUp from "./views/SignUp";
+import PasswordReset from "./views/PasswordReset"
+
+import Workspace from "./views/Workspace";
+import Settings from "./views/Settings";
+import EmailVerify from "./views/EmailVerify";
+
 import * as serviceWorker from './serviceWorker';
 
-import { HashRouter, Route } from "react-router-dom";
+import { BrowserRouter, Route } from "react-router-dom";
 
 ReactDOM.render(
-  <HashRouter>
+  <BrowserRouter>
     <div>
-      <Route path="/" exact component={ SignIn } />
+      <Route path="/" exact component={ EmailVerify } />
       <Route path="/signin" component={ SignIn } />
       <Route path="/signup" component={ SignUp } />
-      <Route path="/channels/:channel" component={ SignUp } />
+      <Route path="/workspace" component={ Workspace } />
+      <Route path="/settings" component={ Settings } />
+      <Route path="/reset" component={ PasswordReset } />
+      <Route path="/verify" component={ EmailVerify } />
     </div>
-  </HashRouter>,
+  </BrowserRouter>,
   document.getElementById('root')
 );
 

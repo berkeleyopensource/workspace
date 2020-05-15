@@ -1,13 +1,13 @@
 import React from 'react';
-import './SignInUp.css';
-
 import { Link } from 'react-router-dom';
+import Navbar from "./components/Navbar";
+import './SignInUp.css';
 
 interface FormState {
   errors: { email: String, password: String, [key: string]: any }
 }
 
-class SignIn extends React.Component<any, FormState> {
+class SignUp extends React.Component<any, FormState> {
   constructor(props: any) {
     super(props);
     this.state = {errors: {email: "", password: ""}};
@@ -21,6 +21,12 @@ class SignIn extends React.Component<any, FormState> {
     const { errors } = this.state;
     // TODO: hook this up to backend api.
     errors.email = "This email has already been used.";
+    errors.password = "This email has already been used.";
+
+    fetch('http://64.225.125.174/api/signup', {
+      method: 'POST',
+      body: JSON.stringify({email, password}),
+    }).then(resp => console.log(resp)).catch(error => console.log(error));
 
     this.setState({errors});
   }
@@ -34,11 +40,9 @@ class SignIn extends React.Component<any, FormState> {
     const { errors } = this.state;
     return (
       <div className="SignInUp">
-        <nav>
-          <h2>workspace</h2>
-        </nav>
+        <Navbar/>
         <form onSubmit={this.handleSubmit}>
-          <h2>Sign in.</h2>
+          <h2>Sign up.</h2>
           <div className={"input-group " + (errors.email ? "input-error" : "")}>
             <div className="input-title">
               Email Address {errors.email ? <span>- {errors.email}</span> : ""}
@@ -58,7 +62,7 @@ class SignIn extends React.Component<any, FormState> {
           </div>
           <div className="input-group">
             <div><Link to="/reset">Forgot your password?</Link></div>
-            <div>Need an account? <Link to="/signup">Register.</Link></div>
+            <div>Already have an account? <Link to="/signin">Sign in.</Link></div>
           </div>
         </form>
       </div>
@@ -66,4 +70,4 @@ class SignIn extends React.Component<any, FormState> {
   }
 }
 
-export default SignIn;
+export default SignUp;

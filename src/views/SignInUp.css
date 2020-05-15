@@ -6,21 +6,26 @@
 }
 
 .SignInUp nav {
-  margin: auto;
   padding: 1em;
+  margin: auto;
+  width: 100vw;
   max-width: 1200px;
 }
 
 .SignInUp nav h2 {
   font-size: 1.5em;
   color: #000;
+  user-select: none;
 }
 
 .SignInUp form {
-  max-width: 400px;
-  margin: auto;
-  margin-top: 10vh;
+  width: 400px;
+  margin: 5vh auto;
   padding: 1em;
+}
+
+.SignInUp form h2 {
+  user-select: none;
 }
 
 .SignInUp form .input-group {
@@ -34,6 +39,7 @@
   color: rgba(55, 55, 55, 0.5);
   transition: color .2s ease-in-out;
   letter-spacing: 0.05em;
+  user-select: none;
 }
 
 .SignInUp form .input-title span {
@@ -102,5 +108,15 @@
 
 .SignInUp form .input-error input {
   box-shadow: rgba(235, 87, 87, 0.7) 0px 0px 0px 1px inset, rgba(235, 87, 87, 0.4) 0px 0px 0px 2px !important;
+}
+
+.SignInUp .titlebar {
+  position: absolute;
+  top: 0;
+  height: 1.5em;
+  width: 100vw;
+  background-color: white;
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
 }
 

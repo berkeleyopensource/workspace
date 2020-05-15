@@ -1,0 +1,36 @@
+.workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+}
+
+.workspace .sidebar {
+  width: 72px;
+  background: #202225;
+  min-height: 100%;
+}
+
+.workspace .content {
+  flex: 1;
+  background:#2F3136;
+  min-height: 100%;
+}
+
+.user-status {
+  padding: 8px;
+  display: flex;
+  flex-direction: row;
+  background-color: #292B2F;
+  color: white;
+}
+
+.user-status .user-avatar {
+  width: 42px;
+  height: 42px;
+  padding-right: 8px;
+}
+
+.user-custom .user-name {
+  font-weight: 600;
+}

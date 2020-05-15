@@ -1,0 +1,21 @@
+.user-avatar svg {
+  height: 100%;
+  width: 100%;
+}
+
+.user-avatar svg foreignObject {
+  height: 100%;
+  width: 100%; 
+}
+
+.user-avatar svg circle {
+  fill: rgb(67, 181, 129);
+  stroke: #292B2F;
+  stroke-width: 2;
+}
+
+.user-avatar img {
+  width: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}

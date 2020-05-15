@@ -1,0 +1,70 @@
+.settings {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  color: white;
+}
+
+.settings .sidebar {
+  background-color: #2F3136;
+  flex: 1 0 250px;
+  padding: 3em 0.5em;
+  display: flex;
+  justify-content: flex-end;  
+  overflow-y: scroll;
+}
+
+.settings .sidebar nav {
+  width: 250px;
+}
+
+.settings .sidebar nav .nav-title {
+  text-transform: uppercase;
+  font-weight: 800;
+  font-size: 0.8em;
+  color: rgb(142, 146, 151);
+  padding: 4px 8px;
+}
+
+.settings .sidebar nav .nav-button {
+  width: 250px;
+  box-sizing: border-box;
+  padding: 8px;
+  margin: 0.25em 0;
+  font-weight: 600;
+  font-size: 1.1em;
+  border-radius: 3px;
+  color: #BABBBE;
+  transition: color .1s ease-in-out, background-color .1s ease-in-out;
+  user-select: none;
+  cursor: pointer;
+}
+
+.settings .sidebar nav .nav-button:hover, .sidebar nav .nav-button.active {
+  color: white;
+  background-color: #37393F;
+}
+
+.settings .sidebar nav .nav-button.button-danger {
+  color: rgb(240, 71, 71);
+}
+
+.settings .sidebar nav .nav-button.button-danger:hover {
+  background-color: rgba(240, 71, 71, 0.1);
+}
+
+.settings .sidebar hr {
+  border-color: rgba(255, 255, 255, 0.06);
+  margin: 8px 10px;
+}
+
+.settings .content {
+  background-color: #37393F;
+  flex: 1 1 800px;
+  padding: 2em;
+  overflow-y: scroll;
+}
+
+.settings .content .section-title {
+  margin-block-start: 0em;
+}

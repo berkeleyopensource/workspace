@@ -15,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 )
 
@@ -22,6 +23,8 @@ var (
 	sendgridKey    string
 	sendgridClient *sendgrid.Client
 	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
+	defaultAPI     = "api.arifulrigan.com"
+	defaultScheme  = "http"
 )
 
 const (
@@ -36,6 +39,20 @@ func generateRandomBytes() ([]byte, error) {
 		return nil, err
 	}
 	return token, nil
+}
+
+func constructVerifyURL(token, invalid string) (string, error) {
+	u, err := url.Parse(defaultAPI)
+	if err != nil {
+		return "", err
+	}
+	u.Scheme = defaultScheme
+	q := u.Query()
+	q.Set("token", token)
+	q.Set("invalud", invalid)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+
 }
 
 func RegisterRoutes(mux *http.ServeMux) error {
@@ -169,8 +186,24 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send verification email
+	verifyToken, err := generateRandomBytes()
+	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	validURL, err := constructVerifyURL(base64Token, "true")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	invalidURL, err := constructVerifyURL(base64Token, "false")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	subject := "User Registration"
-	body := "User registration, but verification required"
+	body := fmt.Sprintf("User registration, but verification required: \n Verify String: %s \n Not you?: %s", validURL, invalidURL)
 	err = SendEmail(credentials.Email, subject, body)
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)

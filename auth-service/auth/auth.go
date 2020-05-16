@@ -45,7 +45,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handleResetPassword)
 	mux.HandleFunc("/api/verify", handleVerifyEmail)
-	
+
 	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
@@ -94,7 +94,7 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-funct handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+func handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		userVerifyEmail(w, r)
@@ -237,30 +237,37 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
-	
+
 	// Unpack verification token and invalid fields.
-	credentials := Credentials{}
-	err := json.NewDecoder(r.Body).Decode(&credentials)
-	if err != nil {
-		log.Print(err.Error("Error unpacking json for email verification."))
-		http.Error(w, err.Error("Error unpacking json for email verification."), http.StatusInternalServerError)
+	queryParam, ok := r.URL.Query()["token"]
+	token := queryParam[0]
+	if !ok || len(queryParam[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
 		return
 	}
-	
-	// Delete user account if invalid field is not null
-	if credentials.invalid != nil {
-		_, err = database.DB.Exec("DELETE FROM users WHERE token=$1", credentials.token)
+
+	queryParam, ok = r.URL.Query()["invalid"]
+	invalid := queryParam[0]
+	if !ok || len(queryParam[0]) < 1 {
+		log.Println("Url Param 'key' is missing")
+		return
+	}
+
+	// Delete user account if invalid field is false
+	if invalid == "false" {
+		_, err := database.DB.Exec("DELETE FROM users WHERE token=$1", token)
 		if err != nil {
-			log.Print(err.Error("Error deleting email corresponding to token."))			
-			http.Error(w, err.Error("Error deleting email corresponding to token."), http.StatusInternalServerError)
+			log.Print(errors.New("error deleting email corresponding to token"))
+			http.Error(w, errors.New("error deleting email corresponding to token").Error(), http.StatusInternalServerError)
 		}
-		
-	// Verify user account
+
+		// Verify user account
 	} else {
-		_, err = database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, credentials.token)
+		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, token)
 		if err != nil {
-			log.Print(err.Error("Error finding email corresponding to token."))			
-			http.Error(w, err.Error("Error finding email corresponding to token."), http.StatusInternalServerError)
+			log.Print(errors.New("error finding email corresponding to token"))
+			http.Error(w, errors.New("error finding email corresponding to token").Error(), http.StatusInternalServerError)
 		}
+	}
 	return
-} 
+}

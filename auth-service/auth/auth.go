@@ -35,7 +35,6 @@ func generateRandomBytes() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return token, nil
 }
 
@@ -45,6 +44,8 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signin", handleSignIn)
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handleResetPassword)
+	mux.HandleFunc("/api/verify", handleVerifyEmail)
+	
 	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
@@ -93,11 +94,22 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+funct handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		userVerifyEmail(w, r)
+		return
+	default:
+		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -126,7 +138,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -143,7 +155,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 	if err != nil {
 		http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
-		log.Fatal(err.Error())
+		log.Print(err.Error())
 		return
 	}
 
@@ -223,3 +235,32 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	return
 }
+
+func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	
+	// Unpack verification token and invalid fields.
+	credentials := Credentials{}
+	err := json.NewDecoder(r.Body).Decode(&credentials)
+	if err != nil {
+		log.Print(err.Error("Error unpacking json for email verification."))
+		http.Error(w, err.Error("Error unpacking json for email verification."), http.StatusInternalServerError)
+		return
+	}
+	
+	// Delete user account if invalid field is not null
+	if credentials.invalid != nil {
+		_, err = database.DB.Exec("DELETE FROM users WHERE token=$1", credentials.token)
+		if err != nil {
+			log.Print(err.Error("Error deleting email corresponding to token."))			
+			http.Error(w, err.Error("Error deleting email corresponding to token."), http.StatusInternalServerError)
+		}
+		
+	// Verify user account
+	} else {
+		_, err = database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, credentials.token)
+		if err != nil {
+			log.Print(err.Error("Error finding email corresponding to token."))			
+			http.Error(w, err.Error("Error finding email corresponding to token."), http.StatusInternalServerError)
+		}
+	return
+} 

@@ -49,7 +49,7 @@ func constructVerifyURL(token, invalid string) (string, error) {
 	u.Scheme = defaultScheme
 	q := u.Query()
 	q.Set("token", token)
-	q.Set("invalud", invalid)
+	q.Set("invalid", invalid)
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 

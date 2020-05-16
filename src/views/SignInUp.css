@@ -74,18 +74,18 @@
   outline: 0;
 }
 
-.SignInUp form .input-group:last-of-type {
+.SignInUp form > .input-group:last-of-type {
   color: rgba(55, 55, 55, 0.5);
   font-size: 0.75em;
   transition: color .2s ease-in-out;
 }
 
-.SignInUp form .input-group:last-of-type a {
+.SignInUp form > .input-group:last-of-type a {
   color: rgba(55, 55, 55, 0.8);
   outline: 0;
 }
 
-.SignInUp form .input-group:last-of-type a:hover, .SignInUp form .input-group:last-of-type a:focus {
+.SignInUp form > .input-group:last-of-type a:hover, .SignInUp form .input-group:last-of-type a:focus {
   color: rgb(46, 170, 220);
 }
 

@@ -3,11 +3,15 @@
   max-width: 1200px;
   left: 0; right: 0;
   margin: auto;
-  padding: 0.50em;
+  padding: 0.50em 2em;
   display: flex;
   align-items: center;
   justify-content: space-between;
   box-sizing: border-box;
+}
+
+.navbar .navbar-logo {
+  margin-right: 0.50em;
 }
 
 .navbar .navbar-logo a {
@@ -17,13 +21,13 @@
 }
 
 .navbar .navbar-logo a img {
-  height: 2em;
-  padding-right: 0.2em;
+  height: 3em;
+  padding-right: 0.1em;
 }
 
 .navbar .navbar-logo h1 {
   letter-spacing: -0.04em;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .navbar a {

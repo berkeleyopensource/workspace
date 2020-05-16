@@ -5,18 +5,6 @@
   margin: auto;
 }
 
-.SignInUp nav {
-  padding: 1em;
-  margin: auto;
-  width: 100vw;
-  max-width: 1200px;
-}
-
-.SignInUp nav h2 {
-  font-size: 1.5em;
-  color: #000;
-  user-select: none;
-}
 
 .SignInUp form {
   width: 400px;

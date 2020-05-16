@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 
+import Landing from "./views/Landing";
 import SignIn from "./views/SignIn";
 import SignUp from "./views/SignUp";
 import PasswordReset from "./views/PasswordReset"
@@ -17,7 +18,7 @@ import { BrowserRouter, Route } from "react-router-dom";
 ReactDOM.render(
   <BrowserRouter>
     <div>
-      <Route path="/" exact component={ EmailVerify } />
+      <Route path="/" exact component={ Landing } />
       <Route path="/signin" component={ SignIn } />
       <Route path="/signup" component={ SignUp } />
       <Route path="/workspace" component={ Workspace } />

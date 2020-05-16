@@ -28,10 +28,12 @@ var (
 )
 
 const (
-	tokenSize = 128
+	jwtTokenSize    = 128
+	verifyTokenSize = 6
+	resetTokenSize  = 6
 )
 
-func generateRandomBytes() ([]byte, error) {
+func generateRandomBytes(tokenSize int) ([]byte, error) {
 	token := make([]byte, tokenSize)
 	_, err := rand.Read(token)
 	// Note that err == nil only if we read len(b) bytes.
@@ -186,7 +188,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Send verification email
-	verifyToken, err := generateRandomBytes()
+	verifyToken, err := generateRandomBytes(verifyTokenSize)
 	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -242,7 +244,7 @@ func userResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update previous token previously existing token
-	token, err := generateRandomBytes()
+	token, err := generateRandomBytes(resetTokenSize)
 	base64Token := base64.StdEncoding.EncodeToString(token)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

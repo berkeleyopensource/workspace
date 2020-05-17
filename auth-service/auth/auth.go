@@ -138,15 +138,15 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
+			http.Error(w, err.New("This email is not associated with an account.").Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.New("Error retrieving information with this email.").Error(), http.StatusInternalServerError)
 		}
-
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, err.New("The password you've entered is incorrect.").Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -166,15 +166,15 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = $1", credentials.Email)
 	var email string
 	if err = rows.Scan(&email); err != sql.ErrNoRows {
-		http.Error(w, errors.New("Email already exists").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("This email is already associated with an account.").Error(), http.StatusConflict)
 		return
 	}
 
 	// Hash the password using bcrypt
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
+		http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
 		return
 	}
 

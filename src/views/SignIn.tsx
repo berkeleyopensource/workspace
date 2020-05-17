@@ -12,30 +12,44 @@ class SignIn extends React.Component<any, FormState> {
     super(props);
     this.state = {errors: {email: "", password: ""}};
   }
+
   handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const form = event.target as HTMLFormElement,
       email = form.email.value, password = form.password.value;
     
-    const { errors } = this.state;
-    // TODO: hook this up to backend api.
-    errors.email = "This email has already been used.";
-    errors.password = "This email has already been used.";
-
-    fetch('http://xxx/api/signup', {
-      method: 'POST',
-      body: JSON.stringify({email, password}),
-    }).then(resp => console.log(resp)).catch(error => console.log(error));
-
-    this.setState({errors});
+    fetch('http://api.arifulrigan.com/api/signin', { method: 'POST', body: JSON.stringify({email, password})})
+      .then(resp => resp.ok ? this.props.history.push("/") : this.handleErrors(resp, form));
   }
+
   handleChange = (event: React.FormEvent<HTMLInputElement>) => {
     const input = event.target as HTMLInputElement;
     const { errors } = this.state;
     errors[input.name] = "";
     this.setState({errors});
   }
+
+  handleErrors = (response: any, form: HTMLFormElement) => {
+    const { errors } = this.state;
+    errors.email = ""; errors.password = "";
+
+    response.text().then((error: String) => {
+      switch (response.status) {
+        case 404: 
+          errors.email = error;
+          form.email.focus()
+          break;
+        case 401:
+          errors.password = error;
+          form.password.focus()
+          break;
+      }
+      this.setState({errors});
+    })
+    
+  }
+
   render() {
     const { errors } = this.state;
     return (

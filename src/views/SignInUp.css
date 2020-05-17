@@ -62,15 +62,20 @@
   color: rgb(46, 170, 220);
   border: none;
   border-radius: 3px;
-  background-color: rgba(46, 170, 220, 0.2);
+  background-color: rgba(46, 170, 220, 0.20);
   box-shadow: rgba(46, 170, 220, 0.7) 0px 0px 0px 1px inset;
-  transition: background-color .2s ease-in-out;
+  transition: background-color .1s ease-in-out;
   font-weight: 600;
   font-size: 0.8em;
 }
 
 .SignInUp form .button-primary:hover, .SignInUp form .button-primary:focus {
   background-color: rgba(46, 170, 220, 0.35);
+  outline: 0;
+}
+
+.SignInUp form .button-primary:active {
+  background-color: rgba(46, 170, 220, 0.50);
   outline: 0;
 }
 

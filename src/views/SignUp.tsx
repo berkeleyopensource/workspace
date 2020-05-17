@@ -18,17 +18,8 @@ class SignUp extends React.Component<any, FormState> {
     const form = event.target as HTMLFormElement,
       email = form.email.value, password = form.password.value;
     
-    const { errors } = this.state;
-    // TODO: hook this up to backend api.
-    errors.email = "This email has already been used.";
-    errors.password = "This email has already been used.";
-
-    fetch('http://64.225.125.174/api/signup', {
-      method: 'POST',
-      body: JSON.stringify({email, password}),
-    }).then(resp => console.log(resp)).catch(error => console.log(error));
-
-    this.setState({errors});
+    fetch('http://api.arifulrigan.com/api/signup', { method: 'POST', body: JSON.stringify({email, password})})
+      .then(resp => resp.ok ? this.props.history.push("/") : this.handleErrors(resp));
   }
   handleChange = (event: React.FormEvent<HTMLInputElement>) => {
     const input = event.target as HTMLInputElement;
@@ -36,6 +27,23 @@ class SignUp extends React.Component<any, FormState> {
     errors[input.name] = "";
     this.setState({errors});
   }
+
+  handleErrors = (response: any) => {
+    const { errors } = this.state;
+    errors.email = ""; errors.password = "";
+    response.text().then((error: String) => {
+      switch (response.status) {
+        case 409: 
+          errors.email = error;
+          break;
+        default:
+          errors.password = error;
+          break;
+      }
+      this.setState({errors});
+    })
+  }
+
   render() {
     const { errors } = this.state;
     return (

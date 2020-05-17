@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"github.com/eecscord/workspace/transfer-service/transfer"
+	"github.com/berkeleyopensource/workspace/transfer-service/transfer"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"net/http"

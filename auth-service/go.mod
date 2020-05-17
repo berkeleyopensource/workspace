@@ -1,4 +1,4 @@
-module github.com/eecscord/workspace/auth-service
+module github.com/berkeleyopensource/workspace/auth-service
 
 go 1.13
 

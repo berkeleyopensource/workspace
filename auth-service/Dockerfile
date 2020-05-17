@@ -1,8 +1,8 @@
 FROM golang:latest
 
-ADD . /go/src/github.com/eecscord/workspace/auth-service
+ADD . /go/src/github.com/berkeleyopensource/workspace/auth-service
 
-WORKDIR /go/src/github.com/eecscord/workspace/auth-service
+WORKDIR /go/src/github.com/berkeleyopensource/workspace/auth-service
 
 RUN go mod download
 

@@ -1,4 +1,4 @@
-github.com/eecscord/workspace v0.0.0-20200412001533-b450a4cab42c h1:k6j59EexsT8Kk7X+TRvaJFyXwY3XyEBbt/uIBIOopPE=
-github.com/eecscord/workspace v0.0.0-20200418084751-efc38340366b h1:2kAGtlzdZ9sDrH8wLQhF9QklUsvBSvOTBeRvvogoe4k=
+github.com/berkeleyopensource/workspace v0.0.0-20200412001533-b450a4cab42c h1:k6j59EexsT8Kk7X+TRvaJFyXwY3XyEBbt/uIBIOopPE=
+github.com/berkeleyopensource/workspace v0.0.0-20200418084751-efc38340366b h1:2kAGtlzdZ9sDrH8wLQhF9QklUsvBSvOTBeRvvogoe4k=
 github.com/go-sql-driver/mysql v1.5.0 h1:ozyZYNQW3x3HtqT1jira07DN2PArx2v7/mN66gGcHOs=
 github.com/go-sql-driver/mysql v1.5.0/go.mod h1:DCzpHaOWr8IXmIStZouvnhqoel9Qv2LBy8hT2VhHyBg=

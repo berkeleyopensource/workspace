@@ -138,15 +138,15 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, err.New("This email is not associated with an account.").Error(), http.StatusNotFound)
+			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
 		} else {
-			http.Error(w, err.New("Error retrieving information with this email.").Error(), http.StatusInternalServerError)
+			http.Error(w, errors.New("Error retrieving information with this email.").Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
-		http.Error(w, err.New("The password you've entered is incorrect.").Error(), http.StatusUnauthorized)
+		http.Error(w, errors.New("The password you've entered is incorrect.").Error(), http.StatusUnauthorized)
 		return
 	}
 

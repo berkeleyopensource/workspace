@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/joho/godotenv"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
@@ -17,14 +18,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 var (
-	sendgridKey    string
-	sendgridClient *sendgrid.Client
-	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
-	defaultAPI     = "api.arifulrigan.com"
-	defaultScheme  = "http"
+	sendgridKey      string
+	sendgridClient   *sendgrid.Client
+	defaultSender    = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
+	defaultAPI       = "api.arifulrigan.com"
+	defaultScheme    = "http"
+	jwtKey           = []byte("my_secret_key")
+	defaultJWTExpiry = 5 * time.Minute
+	defaultJWTIssuer = "workspace-api"
 )
 
 const (
@@ -134,8 +139,8 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if hashed password matches the one corresponding to the email
-	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
+	var hashedPassword, verified string
+	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
@@ -150,7 +155,41 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	io.WriteString(w, "logged in!")
+	var tokenString string
+	expirationTime := time.Now().Add(defaultJWTExpiry)
+
+	if verified == true {
+		claims := jwt.MapClaims{
+			"iss":            defaultJWTIssuer,
+			"iat":            time.Now().Unix(),
+			"exp":            expirationTime.Unix(),
+			"email":          email,
+			"email_verified": true,
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString(jwtKey)
+	} else {
+		claims := jwt.MapClaims{
+			"iss":            defaultJWTIssuer,
+			"iat":            time.Now().Unix(),
+			"exp":            expirationTime.Unix(),
+			"email":          email,
+			"email_verified": false,
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, err := token.SignedString(jwtKey)
+	}
+
+	if err != nil {
+		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	})
 }
 
 func userSignUp(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +251,29 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err.Error())
 		return
 	}
+
+	expirationTime := time.Now().Add(defaultJWTExpiry)
+	claims := jwt.MapClaims{
+		"iss":            defaultJWTIssuer,
+		"iat":            time.Now().Unix(),
+		"exp":            expirationTime.Unix(),
+		"email":          email,
+		"email_verified": false,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	})
+
 }
 
 func userResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -304,5 +366,36 @@ func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("error finding email corresponding to token").Error(), http.StatusInternalServerError)
 		}
 	}
+
+	//get email of the user
+	var email string
+	// Check if email exists
+	err := database.DB.QueryRow("SELECT email FROM users WHERE token = $1", token).scan(&email)
+	if err == sql.ErrNoRows {
+		http.Error(w, errors.New("user email not found, server error").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	expirationTime := time.Now().Add(defaultJWTExpiry)
+	claims := jwt.MapClaims{
+		"iss":            defaultJWTIssuer,
+		"iat":            time.Now().Unix(),
+		"exp":            expirationTime.Unix(),
+		"email":          email,
+		"email_verified": true,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	})
 	return
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/joho/godotenv"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 var (
@@ -64,7 +66,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handlePasswordReset)
 	mux.HandleFunc("/api/verify", handleEmailVerify)
-
+	mux.HandleFunc("api/refresh", handleTokenRefresh)
 	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
@@ -78,7 +80,6 @@ func RegisterRoutes(mux *http.ServeMux) error {
 }
 
 func handleSignIn(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
 		userSignIn(w, r)
@@ -90,7 +91,6 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSignUp(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
 		userSignUp(w, r)
@@ -102,7 +102,6 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
 		userPasswordReset(w, r)
@@ -124,6 +123,17 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		userRefreshToken(w, r)
+		return
+	default:
+		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
@@ -134,8 +144,8 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if hashed password matches the one corresponding to the email
-	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
+	var hashedPassword, verified string
+	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
@@ -150,7 +160,36 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	io.WriteString(w, "logged in!")
+	var tokenString string
+	var refreshString string
+	expirationTime := time.Now().Add(defaultAccessJWTExpiry)
+
+	if verified == true {
+		tokenString, err = NewClaim(email, "access", true)
+		refreshString, err = NewClaim(email, "refresh", true)
+	} else {
+		tokenString, err = NewClaim(email, "access", false)
+		refreshString, err = NewClaim(email, "refresh", false)
+	}
+
+	if err != nil {
+		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "access_token",
+		Value:   tokenString,
+		Expires: DefaultAccessJWTExpiry,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
+	return
 }
 
 func userSignUp(w http.ResponseWriter, r *http.Request) {
@@ -210,6 +249,30 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		log.Print(err.Error())
 		return
 	}
+
+	tokenString, err := NewClaims(email, "access", false)
+	if err != nil {
+		http.Error(w, errors.New("Error creating access token").Error(), http.StatusInternalServerError)
+	}
+
+	refreshString, err = NewClaims(email, "refresh", false)
+	if err != nil {
+		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "access_token",
+		Value:   tokenString,
+		Expires: DefaultAccessJWTExpiry,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
+	return
 }
 
 func userPasswordReset(w http.ResponseWriter, r *http.Request) {
@@ -277,6 +340,10 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Remove reset token from database to prevent invalid re-use
+
+		// Invalidate all logged-in sessions (JWTs and refresh tokens)
+
 		// Return with 204 response		
 
 	}
@@ -316,5 +383,57 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("error finding email corresponding to token").Error(), http.StatusInternalServerError)
 		}
 	}
+
+	//get email of the user
+	var email string
+	// Check if email exists
+	err := database.DB.QueryRow("SELECT email FROM users WHERE token = $1", token).scan(&email)
+	if err == sql.ErrNoRows {
+		http.Error(w, errors.New("user email not found, server error").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tokenString, err := NewClaim(email, "access", true)
+	if err != nil {
+		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+	}
+
+	refreshString, err = NewClaims(email, "refresh", true)
+	if err != nil {
+		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "access_token",
+		Value:   tokenString,
+		Expires: DefaultAccessJWTExpiry,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
 	return
+}
+
+func userRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, statusCode, err := extractToken(r, "refresh_token")
+	if err != nil {
+		http.Error(w, err.Error, statusCode)
+	}
+
+	token, err := VerifyToken(refreshToken)
+	if err != nil {
+		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
+	}
+
+	err = ValdiateToken(token)
+	if err != nil {
+		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
+	}
+
+	claims, _ := token.Claims.(jwt.MapClaims)
+
 }

@@ -22,14 +22,11 @@ import (
 )
 
 var (
-	sendgridKey      string
-	sendgridClient   *sendgrid.Client
-	defaultSender    = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
-	defaultAPI       = "api.arifulrigan.com"
-	defaultScheme    = "http"
-	jwtKey           = []byte("my_secret_key")
-	defaultJWTExpiry = 5 * time.Minute
-	defaultJWTIssuer = "workspace-api"
+	sendgridKey    string
+	sendgridClient *sendgrid.Client
+	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
+	defaultAPI     = "api.arifulrigan.com"
+	defaultScheme  = "http"
 )
 
 const (
@@ -156,28 +153,15 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tokenString string
-	expirationTime := time.Now().Add(defaultJWTExpiry)
+	var refreshString string
+	expirationTime := time.Now().Add(defaultAccessJWTExpiry)
 
 	if verified == true {
-		claims := jwt.MapClaims{
-			"iss":            defaultJWTIssuer,
-			"iat":            time.Now().Unix(),
-			"exp":            expirationTime.Unix(),
-			"email":          email,
-			"email_verified": true,
-		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, err := token.SignedString(jwtKey)
+		tokenString, err = NewClaim(email, "access", true)
+		refreshString, err = NewClaim(email, "refresh", true)
 	} else {
-		claims := jwt.MapClaims{
-			"iss":            defaultJWTIssuer,
-			"iat":            time.Now().Unix(),
-			"exp":            expirationTime.Unix(),
-			"email":          email,
-			"email_verified": false,
-		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		tokenString, err := token.SignedString(jwtKey)
+		tokenString, err = NewClaim(email, "access", false)
+		refreshString, err = NewClaim(email, "refresh", false)
 	}
 
 	if err != nil {
@@ -186,10 +170,18 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:    "token",
+		Name:    "access_token",
 		Value:   tokenString,
-		Expires: expirationTime,
+		Expires: DefaultAccessJWTExpiry,
 	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
+	return
 }
 
 func userSignUp(w http.ResponseWriter, r *http.Request) {
@@ -252,28 +244,29 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expirationTime := time.Now().Add(defaultJWTExpiry)
-	claims := jwt.MapClaims{
-		"iss":            defaultJWTIssuer,
-		"iat":            time.Now().Unix(),
-		"exp":            expirationTime.Unix(),
-		"email":          email,
-		"email_verified": false,
+	tokenString, err := NewClaims(email, "access", false)
+	if err != nil {
+		http.Error(w, errors.New("Error creating access token").Error(), http.StatusInternalServerError)
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	tokenString, err := token.SignedString(jwtKey)
+	refreshString, err = NewClaims(email, "refresh", false)
 	if err != nil {
-		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:    "token",
+		Name:    "access_token",
 		Value:   tokenString,
-		Expires: expirationTime,
+		Expires: DefaultAccessJWTExpiry,
 	})
 
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
+	return
 }
 
 func userResetPassword(w http.ResponseWriter, r *http.Request) {
@@ -376,26 +369,27 @@ func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expirationTime := time.Now().Add(defaultJWTExpiry)
-	claims := jwt.MapClaims{
-		"iss":            defaultJWTIssuer,
-		"iat":            time.Now().Unix(),
-		"exp":            expirationTime.Unix(),
-		"email":          email,
-		"email_verified": true,
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	tokenString, err := token.SignedString(jwtKey)
+	tokenString, err := NewClaim(email, "access", true)
 	if err != nil {
 		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
 	}
 
+	refreshString, err = NewClaims(email, "refresh", true)
+	if err != nil {
+		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:    "token",
+		Name:    "access_token",
 		Value:   tokenString,
-		Expires: expirationTime,
+		Expires: DefaultAccessJWTExpiry,
 	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "refresh_token",
+		Value:   refreshString,
+		Expires: DefaultRefreshJWTExpiry,
+	})
+
 	return
 }

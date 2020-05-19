@@ -66,7 +66,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handleResetPassword)
 	mux.HandleFunc("/api/verify", handleVerifyEmail)
-
+	mux.HandleFunc("api/refresh", handleTokenRefresh)
 	// Load sendgrid credentials
 	err := godotenv.Load()
 	if err != nil {
@@ -119,6 +119,18 @@ func handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		userVerifyEmail(w, r)
+		return
+	default:
+		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
+	switch r.Method {
+	case "POST":
+		userRefreshToken(w, r)
 		return
 	default:
 		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
@@ -392,4 +404,24 @@ func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	})
 
 	return
+}
+
+func userRefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken, statusCode, err := extractToken(r, "refresh_token")
+	if err != nil {
+		http.Error(w, err.Error, statusCode)
+	}
+
+	token, err := VerifyToken(refreshToken)
+	if err != nil {
+		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
+	}
+
+	err = ValdiateToken(token)
+	if err != nil {
+		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
+	}
+
+	claims, _ := token.Claims.(jwt.MapClaims)
+
 }

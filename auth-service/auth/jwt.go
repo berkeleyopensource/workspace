@@ -36,3 +36,44 @@ func NewClaim(email, subject string, verified bool) (string, error) {
 	}
 	return tokenString, err
 }
+
+func ExtractToken(r *http.Request, tokenName string) (string, int, error) {
+	c, err := r.Cookie(tokenName)
+	if err != nil {
+		if err == http.ErrNoCookie {
+			return "", http.StatusUnauthorized, errors.New("No refresh token found").Error()
+		}
+		return "", http.StatusBadRequest, errors.New("Bad Request").Error()
+	}
+
+	return c.Value, nil, -1
+}
+
+func VerifyToken(tokenString string) (*jwt.Token, error) {
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// do something with decoded claims
+	for key, val := range claims {
+		fmt.Printf("Key: %v, value: %v\n", key, val)
+	}
+
+	return token, nil
+}
+
+func Validatetoken(token *jwt.Token) error {
+	token, err := VerifyToken(r)
+	if err != nil {
+		return err
+	}
+	if _, ok := token.Claims.(jwt.MapClaims); !ok && !token.Valid {
+		return err
+	}
+	return nil
+}

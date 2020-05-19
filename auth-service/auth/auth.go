@@ -62,8 +62,8 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	// Initialize routes
 	mux.HandleFunc("/api/signin", handleSignIn)
 	mux.HandleFunc("/api/signup", handleSignUp)
-	mux.HandleFunc("/api/reset", handleResetPassword)
-	mux.HandleFunc("/api/verify", handleVerifyEmail)
+	mux.HandleFunc("/api/reset", handlePasswordReset)
+	mux.HandleFunc("/api/verify", handleEmailVerify)
 
 	// Load sendgrid credentials
 	err := godotenv.Load()
@@ -101,11 +101,11 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleResetPassword(w http.ResponseWriter, r *http.Request) {
+func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "https://localhost:3000")
 	switch r.Method {
 	case "POST":
-		userResetPassword(w, r)
+		userPasswordReset(w, r)
 		return
 	default:
 		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
@@ -113,10 +113,10 @@ func handleResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
-		userVerifyEmail(w, r)
+		userEmailVerify(w, r)
 		return
 	default:
 		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
@@ -179,8 +179,6 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store (unverified) credentials into the database
-	// implement following line after database has been edited
-	//_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified) VALUES (@email,@hashedPassword, @verified)", sql.Named("email", credentials.Email), sql.Named("hashedPassword", string(hashedPassword)), sql.Named("verified", 0))
 	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken) VALUES ($1,$2, FALSE, NULL)", credentials.Email, string(hashedPassword))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -209,69 +207,83 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	err = SendEmail(credentials.Email, subject, body)
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)
-		log.Fatal(err.Error())
+		log.Print(err.Error())
 		return
 	}
 }
 
-func userResetPassword(w http.ResponseWriter, r *http.Request) {
+func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 
-	//Obtain user credentials
+	// Decode json credentials
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Fatal(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error("Error decoding json body."), http.StatusInternalServerError)
+		log.Print(err.Error("Error decoding json body."))
 		return
 	}
 
-	// Check if hashed password matches the one corresponding to the email
-	var hashedPassword string
-	err = database.DB.QueryRow("select hashedPassword from users where email=$1", credentials.Email).Scan(&hashedPassword)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+
+	// 1st pass: email, no token
+	if (credentials.Email != nil && credentials.Password == nil) {
+
+		// Create a password reset token
+		token, err := generateRandomBytes(resetTokenSize)
+		base64Token := base64.StdEncoding.EncodeToString(token)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		// Store reset token into database
+		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", base64Token, credentials.Email)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+		// Create email with password reset link
+		subject := fmt.Sprintf("Reset token for user: %s", credentials.Email)
+		body := fmt.Sprintf("Reset Token: %s", base64Token)
+		err = SendEmail(credentials.Email, subject, body)
+		if err != nil {
+			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error("Error sending password reset email."))
+			return
+		}
+
+		// Return with 202 response
+
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
+	// 2nd pass: token, no email
+	if (credentials.Email == nil && credentials.Password != nil) {
 
-	//update previous token previously existing token
-	token, err := generateRandomBytes(resetTokenSize)
-	base64Token := base64.StdEncoding.EncodeToString(token)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+		// Hash the password using bcrypt
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Print(err.Error())
+			http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
+			return
+		}
 
-	_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", base64Token, credentials.Email)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
+		// Update the password field with new password
+		_, err = database.DB.Exec("UPDATE users SET password=$1 WHERE resetToken=$2", hashedPassword, credentials.resetToken)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
+			} else {
+				http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 
-	// Send token to user
-	fmt.Println("token: ", token)
-	fmt.Println("base64 token: ", base64Token)
-	subject := fmt.Sprintf("Reset token for user: %s", credentials.Email)
-	body := fmt.Sprintf("Reset Token: %s", base64Token)
-	err = SendEmail(credentials.Email, subject, body)
-	if err != nil {
-		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)
-		log.Fatal(err.Error())
-		return
-	}
+		// Return with 204 response		
 
+	}
 	return
 }
 
-func userVerifyEmail(w http.ResponseWriter, r *http.Request) {
+func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	// Unpack verification token and invalid fields.
 	queryParam, ok := r.URL.Query()["token"]

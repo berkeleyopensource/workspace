@@ -143,7 +143,6 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if hashed password matches the one corresponding to the email
 	var hashedPassword, verified string
 	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
 	if err != nil {
@@ -155,37 +154,38 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); err != nil {
+	// Check if hashed password matches the one corresponding to the email
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); 
+	if err != nil {
 		http.Error(w, errors.New("The password you've entered is incorrect.").Error(), http.StatusUnauthorized)
 		return
 	}
 
-	var tokenString string
-	var refreshString string
-	expirationTime := time.Now().Add(defaultAccessJWTExpiry)
+	// Create access and refresh tokens to be kept as cookies.
 
-	if verified == true {
-		tokenString, err = NewClaim(email, "access", true)
-		refreshString, err = NewClaim(email, "refresh", true)
-	} else {
-		tokenString, err = NewClaim(email, "access", false)
-		refreshString, err = NewClaim(email, "refresh", false)
+	var accessToken string
+	accessToken, err = NewClaim(email, "access", verified)
+	if err != nil {
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		return
 	}
 
+	var refreshToken string
+	refreshToken, err = NewClaim(email, "refresh", verified)
 	if err != nil {
-		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error creating refreshToken.").Error(),http.StatusInternalServerError)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:    "access_token",
-		Value:   tokenString,
+		Value:   accessToken,
 		Expires: DefaultAccessJWTExpiry,
 	})
 
 	http.SetCookie(w, &http.Cookie{
 		Name:    "refresh_token",
-		Value:   refreshString,
+		Value:   refreshToken,
 		Expires: DefaultRefreshJWTExpiry,
 	})
 
@@ -286,7 +286,6 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	// 1st pass: email, no token
 	if (credentials.Email != nil && credentials.Password == nil) {
 
@@ -315,7 +314,8 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Return with 202 response
-
+		w.WriteHeader(http.StatusAccepted)
+		return
 	}
 
 	// 2nd pass: token, no email
@@ -329,8 +329,8 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update the password field with new password
-		_, err = database.DB.Exec("UPDATE users SET password=$1 WHERE resetToken=$2", hashedPassword, credentials.resetToken)
+		// Update the password field and remove reset token to prevent invalid re-use
+		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, null, credentials.token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -340,13 +340,14 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Remove reset token from database to prevent invalid re-use
-
-		// Invalidate all logged-in sessions (JWTs and refresh tokens)
+		// TODO: Invalidate all sessions by issuing new refresh token
 
 		// Return with 204 response		
-
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
+
+	http.Error(w, errors.New("Error with email or password fields.").Error(), http.StatusBadRequest)
 	return
 }
 
@@ -375,7 +376,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("error deleting email corresponding to token").Error(), http.StatusInternalServerError)
 		}
 
-		// Verify user account
+	// Verify user account
 	} else {
 		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, token)
 		if err != nil {

@@ -12,23 +12,13 @@ var (
 	jwtKey                  = []byte("my_secret_key")
 )
 
-func NewClaim(email, subject string, verified bool) (string, error) {
-
-	var expirationTime time.Time
-	if subject == "access" {
-		expirationTime = time.Now().Add(defaultAccessJWTExpiry)
-	} else {
-		expirationTime = time.Now().Add(defaultRefreshJWTExpiry)
+func NewClaims(c jwt.MapClaims) (string, error) {
+	claims := jwt.MapClaims{
+		"Issuer":    defaultJWTIssuer,
+		"IssuedAt":  time.Now().Unix(),
+		*c
 	}
 
-	claim := jwt.MapClaims{
-		"iss":            defaultJWTIssuer,
-		"sub":            subject,
-		"iat":            time.Now().Unix(),
-		"exp":            expirationTime.Unix(),
-		"email":          email,
-		"email_verified": verified,
-	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {

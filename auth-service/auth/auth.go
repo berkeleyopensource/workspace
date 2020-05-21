@@ -13,12 +13,11 @@ import (
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"golang.org/x/crypto/bcrypt"
-	"io"
 	"log"
+	"html/template"
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 )
 
 var (
@@ -143,7 +142,9 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var hashedPassword, verified string
+	var hashedPassword string
+	var verified bool
+
 	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -162,31 +163,46 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create access and refresh tokens to be kept as cookies.
+	// TODO: come up with a better abstraction for any fields.
+
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var accessToken string
-	accessToken, err = NewClaim(email, "access", verified)
+	accessToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "access", 
+		"ExpiresAt": accessExpiresAt.Unix(),
+		"Email": credentials.Email,
+		"EmailVerified": verified,
+	})
+
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+
 	var refreshToken string
-	refreshToken, err = NewClaim(email, "refresh", verified)
+	refreshToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "refresh", 
+		"ExpiresAt": refreshExpiresAt.Unix(),
+	})
+
 	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(),http.StatusInternalServerError)
+		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
 		return
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name:    "access_token",
-		Value:   accessToken,
-		Expires: DefaultAccessJWTExpiry,
-	})
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "refresh_token",
-		Value:   refreshToken,
-		Expires: DefaultRefreshJWTExpiry,
+		Name: "refresh_token",
+		Value: refreshToken,
+		Expires: refreshExpiresAt,
 	})
 
 	return
@@ -231,45 +247,58 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	validURL, err := constructVerifyURL(base64Token, "true")
+
+	subject := "Email Verification"
+	
+	var body bytes.Buffer
+	t, err = template.ParseFiles("signup-template.html")
+	t.Execute(&body, struct { Token string }{ Token: base64Token })
+
+	err = SendEmail(credentials.Email, subject, body.Bytes())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	invalidURL, err := constructVerifyURL(base64Token, "false")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	subject := "User Registration"
-	body := fmt.Sprintf("User registration, but verification required: \n Verify String: %s \n Not you?: %s", validURL, invalidURL)
-	err = SendEmail(credentials.Email, subject, body)
-	if err != nil {
-		http.Error(w, errors.New("Error sending verification email").Error(), http.StatusInternalServerError)
-		log.Print(err.Error())
+		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error("Error sending verification email."))
 		return
 	}
 
-	tokenString, err := NewClaims(email, "access", false)
-	if err != nil {
-		http.Error(w, errors.New("Error creating access token").Error(), http.StatusInternalServerError)
-	}
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
-	refreshString, err = NewClaims(email, "refresh", false)
-	if err != nil {
-		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "access_token",
-		Value:   tokenString,
-		Expires: DefaultAccessJWTExpiry,
+	var accessToken string
+	accessToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "access", 
+		"ExpiresAt": accessExpiresAt.Unix(),
+		"Email": credentials.Email,
+		"EmailVerified": false,
 	})
 
+	if err != nil {
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:    "refresh_token",
-		Value:   refreshString,
-		Expires: DefaultRefreshJWTExpiry,
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+
+	var refreshToken string
+	refreshToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "refresh", 
+		"ExpiresAt": refreshExpiresAt.Unix(),
+	})
+
+	if err != nil {
+		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name: "refresh_token",
+		Value: refreshToken,
+		Expires: refreshExpiresAt,
 	})
 
 	return
@@ -394,26 +423,44 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenString, err := NewClaim(email, "access", true)
-	if err != nil {
-		http.Error(w, errors.New("Error creating verification token").Error(), http.StatusInternalServerError)
-	}
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
-	refreshString, err = NewClaims(email, "refresh", true)
-	if err != nil {
-		http.Error(w, errors.New("Error creating refresh token").Error(), http.StatusInternalServerError)
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:    "access_token",
-		Value:   tokenString,
-		Expires: DefaultAccessJWTExpiry,
+	var accessToken string
+	accessToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "access", 
+		"ExpiresAt": accessExpiresAt.Unix(),
+		"Email": email,
+		"EmailVerified": true,
 	})
 
+	if err != nil {
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
-		Name:    "refresh_token",
-		Value:   refreshString,
-		Expires: DefaultRefreshJWTExpiry,
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+
+	var refreshToken string
+	refreshToken, err = NewClaims(jwt.MapClaims{
+		"Subject": "refresh", 
+		"ExpiresAt": refreshExpiresAt.Unix(),
+	})
+
+	if err != nil {
+		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name: "refresh_token",
+		Value: refreshToken,
+		Expires: refreshExpiresAt,
 	})
 
 	return

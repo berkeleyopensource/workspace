@@ -2,21 +2,29 @@ package auth
 
 import (
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
-	"log"
+	"html/template"
+	"bytes"
 )
 
-func SendEmail(recipient, subject, body string) error {
+func SendEmail(recipient string, subject string, templatePath string, data map[string]interface{}) error {
+
+	// Parse template file and execute with data.
+	var html bytes.Buffer
+	tmpl, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return err
+	}
+	tmpl.Execute(&html, data)
 
 	recipientEmail := mail.NewEmail("recipient", recipient)
-	htmlContent := "<p>" + body + "</p>"
+	plainTextContent := "Your password reset token is "
 
-	message := mail.NewSingleEmail(defaultSender, subject, recipientEmail, body, htmlContent)
-
+	// Construct and send email via Sendgrid.
+	message := mail.NewSingleEmail(defaultSender, subject, recipientEmail, plainTextContent, html.String())
 	response, err := sendgridClient.Send(message)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Statuscode: %d, Response:%s", response.StatusCode, response.Body)
 	return nil
 }

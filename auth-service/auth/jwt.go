@@ -2,21 +2,26 @@ package auth
 
 import (
 	"github.com/dgrijalva/jwt-go"
+	"net/http"
 	"time"
 )
 
 var (
-	DefaultAccessJWTExpiry  = 5 * time.Minute
-	DefaultRefreshJWTExpiry = 30 * time.Day
+	DefaultAccessJWTExpiry  =  5        * time.Minute // refresh every  5 minutes
+	DefaultRefreshJWTExpiry = 30 * 1440 * time.Minute // refresh every 30 days
 	defaultJWTIssuer        = "workspace-api"
 	jwtKey                  = []byte("my_secret_key")
 )
 
-func NewClaims(c jwt.MapClaims) (string, error) {
+func NewClaims(data map[string]interface{}) (string, error) {
+
 	claims := jwt.MapClaims{
 		"Issuer":    defaultJWTIssuer,
 		"IssuedAt":  time.Now().Unix(),
-		*c
+	}
+
+	for key, val := range data {
+    claims[key] = val
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -27,16 +32,12 @@ func NewClaims(c jwt.MapClaims) (string, error) {
 	return tokenString, err
 }
 
-func ExtractToken(r *http.Request, tokenName string) (string, int, error) {
+func ExtractToken(r *http.Request, tokenName string) (string, error) {
 	c, err := r.Cookie(tokenName)
 	if err != nil {
-		if err == http.ErrNoCookie {
-			return "", http.StatusUnauthorized, errors.New("No refresh token found").Error()
-		}
-		return "", http.StatusBadRequest, errors.New("Bad Request").Error()
+		return "", err
 	}
-
-	return c.Value, nil, -1
+	return c.Value, nil
 }
 
 func VerifyToken(tokenString string) (*jwt.Token, error) {
@@ -51,13 +52,13 @@ func VerifyToken(tokenString string) (*jwt.Token, error) {
 
 	// do something with decoded claims
 	for key, val := range claims {
-		fmt.Printf("Key: %v, value: %v\n", key, val)
+		// fmt.Printf("Key: %v, value: %v\n", key, val)
 	}
 
 	return token, nil
 }
 
-func Validatetoken(token *jwt.Token) error {
+func ValidateToken(token *jwt.Token) error {
 	token, err := VerifyToken(r)
 	if err != nil {
 		return err

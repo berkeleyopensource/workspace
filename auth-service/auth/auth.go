@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/joho/godotenv"
@@ -14,9 +13,8 @@ import (
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"golang.org/x/crypto/bcrypt"
 	"log"
-	"html/template"
 	"net/http"
-	"net/url"
+	"time"
 	"os"
 )
 
@@ -42,20 +40,6 @@ func generateRandomBytes(tokenSize int) ([]byte, error) {
 		return nil, err
 	}
 	return token, nil
-}
-
-func constructVerifyURL(token, invalid string) (string, error) {
-	u, err := url.Parse(defaultAPI)
-	if err != nil {
-		return "", err
-	}
-	u.Scheme = defaultScheme
-	q := u.Query()
-	q.Set("token", token)
-	q.Set("invalid", invalid)
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-
 }
 
 func RegisterRoutes(mux *http.ServeMux) error {
@@ -168,7 +152,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var accessToken string
-	accessToken, err = NewClaims(jwt.MapClaims{
+	accessToken, err = NewClaims(map[string]interface{}{
 		"Subject": "access", 
 		"ExpiresAt": accessExpiresAt.Unix(),
 		"Email": credentials.Email,
@@ -189,7 +173,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var refreshToken string
-	refreshToken, err = NewClaims(jwt.MapClaims{
+	refreshToken, err = NewClaims(map[string]interface{}{
 		"Subject": "refresh", 
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
@@ -248,23 +232,17 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subject := "Email Verification"
-	
-	var body bytes.Buffer
-	t, err = template.ParseFiles("signup-template.html")
-	t.Execute(&body, struct { Token string }{ Token: base64Token })
-
-	err = SendEmail(credentials.Email, subject, body.Bytes())
+	err = SendEmail(credentials.Email, "Email Verification", "signup-template.html", map[string]interface{}{ "Token": base64Token })
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
-		log.Print(err.Error("Error sending verification email."))
+		log.Print(err.Error())
 		return
 	}
 
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var accessToken string
-	accessToken, err = NewClaims(jwt.MapClaims{
+	accessToken, err = NewClaims(map[string]interface{}{
 		"Subject": "access", 
 		"ExpiresAt": accessExpiresAt.Unix(),
 		"Email": credentials.Email,
@@ -285,7 +263,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var refreshToken string
-	refreshToken, err = NewClaims(jwt.MapClaims{
+	refreshToken, err = NewClaims(map[string]interface{}{
 		"Subject": "refresh", 
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
@@ -310,13 +288,13 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		http.Error(w, err.Error("Error decoding json body."), http.StatusInternalServerError)
-		log.Print(err.Error("Error decoding json body."))
+		http.Error(w, errors.New("Error decoding json body.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
 	// 1st pass: email, no token
-	if (credentials.Email != nil && credentials.Password == nil) {
+	if (credentials.Email != "" && credentials.Password == "") {
 
 		// Create a password reset token
 		token, err := generateRandomBytes(resetTokenSize)
@@ -333,12 +311,10 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create email with password reset link
-		subject := fmt.Sprintf("Reset token for user: %s", credentials.Email)
-		body := fmt.Sprintf("Reset Token: %s", base64Token)
-		err = SendEmail(credentials.Email, subject, body)
+		err = SendEmail(credentials.Email, "Password Reset", "reset-template.html", map[string]interface{}{ "Token": base64Token })
 		if err != nil {
 			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
-			log.Print(err.Error("Error sending password reset email."))
+			log.Print(err.Error())
 			return
 		}
 
@@ -348,7 +324,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2nd pass: token, no email
-	if (credentials.Email == nil && credentials.Password != nil) {
+	if (credentials.Email == "" && credentials.Password != "") {
 
 		// Hash the password using bcrypt
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
@@ -359,7 +335,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, null, credentials.token)
+		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, "", credentials.Token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -417,7 +393,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	//get email of the user
 	var email string
 	// Check if email exists
-	err := database.DB.QueryRow("SELECT email FROM users WHERE token = $1", token).scan(&email)
+	err := database.DB.QueryRow("SELECT email FROM users WHERE token = $1", token).Scan(&email)
 	if err == sql.ErrNoRows {
 		http.Error(w, errors.New("user email not found, server error").Error(), http.StatusInternalServerError)
 		return
@@ -426,7 +402,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var accessToken string
-	accessToken, err = NewClaims(jwt.MapClaims{
+	accessToken, err = NewClaims(map[string]interface{}{
 		"Subject": "access", 
 		"ExpiresAt": accessExpiresAt.Unix(),
 		"Email": email,
@@ -447,7 +423,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 
 	var refreshToken string
-	refreshToken, err = NewClaims(jwt.MapClaims{
+	refreshToken, err = NewClaims(map[string]interface{}{
 		"Subject": "refresh", 
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
@@ -467,9 +443,14 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func userRefreshToken(w http.ResponseWriter, r *http.Request) {
-	refreshToken, statusCode, err := extractToken(r, "refresh_token")
+	refreshToken, err := ExtractToken(r, "refresh_token")
 	if err != nil {
-		http.Error(w, err.Error, statusCode)
+		if (err == http.ErrNoCookie) {
+			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
+		} else {
+			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
+		}
+		return
 	}
 
 	token, err := VerifyToken(refreshToken)
@@ -477,7 +458,7 @@ func userRefreshToken(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
 	}
 
-	err = ValdiateToken(token)
+	err = ValidateToken(token)
 	if err != nil {
 		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
 	}

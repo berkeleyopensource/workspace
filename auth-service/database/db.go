@@ -26,3 +26,10 @@ func InitializeUsersTable() error {
 
 	return nil
 }
+
+func InitializeTokensTable() error {
+	_, err := DB.Exec(`CREATE TABLE tokens (
+		email VARCHAR(320),
+		token TEXT
+	)`)
+}

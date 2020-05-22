@@ -1,9 +1,9 @@
 package auth
 
 import (
+	"bytes"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"html/template"
-	"bytes"
 )
 
 func SendEmail(recipient string, subject string, templatePath string, data map[string]interface{}) error {
@@ -21,7 +21,7 @@ func SendEmail(recipient string, subject string, templatePath string, data map[s
 
 	// Construct and send email via Sendgrid.
 	message := mail.NewSingleEmail(defaultSender, subject, recipientEmail, plainTextContent, html.String())
-	response, err := sendgridClient.Send(message)
+	_, err = sendgridClient.Send(message)
 	if err != nil {
 		return err
 	}

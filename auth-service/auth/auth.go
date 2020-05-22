@@ -7,15 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
-	"github.com/dgrijalva/jwt-go"
+	_ "github.com/dgrijalva/jwt-go"
 	"github.com/joho/godotenv"
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
-	"time"
 	"os"
+	"time"
 )
 
 var (
@@ -68,7 +68,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		userSignIn(w, r)
 		return
 	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("only POST requests are allowed on this endpoint").Error(), http.StatusBadRequest)
 		return
 	}
 }
@@ -79,7 +79,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		userSignUp(w, r)
 		return
 	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("only POST requests are allowed on this endpoint").Error(), http.StatusBadRequest)
 		return
 	}
 }
@@ -90,7 +90,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		userPasswordReset(w, r)
 		return
 	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("only POST requests are allowed on this endpoint").Error(), http.StatusBadRequest)
 		return
 	}
 }
@@ -101,7 +101,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		userEmailVerify(w, r)
 		return
 	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("only POST requests are allowed on this endpoint").Error(), http.StatusBadRequest)
 		return
 	}
 }
@@ -109,10 +109,10 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
-		userRefreshToken(w, r)
+		//userRefreshToken(w, r)
 		return
 	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		http.Error(w, errors.New("only POST requests are allowed on this endpoint").Error(), http.StatusBadRequest)
 		return
 	}
 }
@@ -129,6 +129,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	var hashedPassword string
 	var verified bool
 
+	// Obtain user details from DB, if they exist
 	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -140,7 +141,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if hashed password matches the one corresponding to the email
-	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password)); 
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(credentials.Password))
 	if err != nil {
 		http.Error(w, errors.New("The password you've entered is incorrect.").Error(), http.StatusUnauthorized)
 		return
@@ -150,12 +151,11 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	// TODO: come up with a better abstraction for any fields.
 
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
 	var accessToken string
 	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
+		"Subject":       "access",
+		"ExpiresAt":     accessExpiresAt.Unix(),
+		"Email":         credentials.Email,
 		"EmailVerified": verified,
 	})
 
@@ -165,8 +165,8 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
+		Name:    "access_token",
+		Value:   accessToken,
 		Expires: accessExpiresAt,
 	})
 
@@ -174,7 +174,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 
 	var refreshToken string
 	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
+		"Subject":   "refresh",
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
 
@@ -184,8 +184,8 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
+		Name:    "refresh_token",
+		Value:   refreshToken,
 		Expires: refreshExpiresAt,
 	})
 
@@ -232,7 +232,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = SendEmail(credentials.Email, "Email Verification", "signup-template.html", map[string]interface{}{ "Token": base64Token })
+	err = SendEmail(credentials.Email, "Email Verification", "auth/signup-template.html", map[string]interface{}{"Token": base64Token})
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -243,9 +243,9 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 
 	var accessToken string
 	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
+		"Subject":       "access",
+		"ExpiresAt":     accessExpiresAt.Unix(),
+		"Email":         credentials.Email,
 		"EmailVerified": false,
 	})
 
@@ -255,8 +255,8 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
+		Name:    "access_token",
+		Value:   accessToken,
 		Expires: accessExpiresAt,
 	})
 
@@ -264,7 +264,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 
 	var refreshToken string
 	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
+		"Subject":   "refresh",
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
 
@@ -274,8 +274,8 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
+		Name:    "refresh_token",
+		Value:   refreshToken,
 		Expires: refreshExpiresAt,
 	})
 
@@ -294,7 +294,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1st pass: email, no token
-	if (credentials.Email != "" && credentials.Password == "") {
+	if credentials.Email != "" && credentials.Password == "" {
 
 		// Create a password reset token
 		token, err := generateRandomBytes(resetTokenSize)
@@ -311,7 +311,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create email with password reset link
-		err = SendEmail(credentials.Email, "Password Reset", "reset-template.html", map[string]interface{}{ "Token": base64Token })
+		err = SendEmail(credentials.Email, "Password Reset", "reset-template.html", map[string]interface{}{"Token": base64Token})
 		if err != nil {
 			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -324,7 +324,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2nd pass: token, no email
-	if (credentials.Email == "" && credentials.Password != "") {
+	if credentials.Email == "" && credentials.Password != "" {
 
 		// Hash the password using bcrypt
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
@@ -347,7 +347,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: Invalidate all sessions by issuing new refresh token
 
-		// Return with 204 response		
+		// Return with 204 response
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -381,7 +381,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("error deleting email corresponding to token").Error(), http.StatusInternalServerError)
 		}
 
-	// Verify user account
+		// Verify user account
 	} else {
 		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, token)
 		if err != nil {
@@ -403,9 +403,9 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	var accessToken string
 	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": email,
+		"Subject":       "access",
+		"ExpiresAt":     accessExpiresAt.Unix(),
+		"Email":         email,
 		"EmailVerified": true,
 	})
 
@@ -415,8 +415,8 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
+		Name:    "access_token",
+		Value:   accessToken,
 		Expires: accessExpiresAt,
 	})
 
@@ -424,7 +424,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	var refreshToken string
 	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
+		"Subject":   "refresh",
 		"ExpiresAt": refreshExpiresAt.Unix(),
 	})
 
@@ -434,35 +434,35 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
+		Name:    "refresh_token",
+		Value:   refreshToken,
 		Expires: refreshExpiresAt,
 	})
 
 	return
 }
 
-func userRefreshToken(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := ExtractToken(r, "refresh_token")
-	if err != nil {
-		if (err == http.ErrNoCookie) {
-			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
-		} else {
-			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
-		}
-		return
-	}
+// func userRefreshToken(w http.ResponseWriter, r *http.Request) {
+// 	refreshToken, err := ExtractToken(r, "refresh_token")
+// 	if err != nil {
+// 		if err == http.ErrNoCookie {
+// 			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
+// 		} else {
+// 			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
+// 		}
+// 		return
+// 	}
 
-	token, err := VerifyToken(refreshToken)
-	if err != nil {
-		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
-	}
+// 	token, err := VerifyToken(refreshToken)
+// 	if err != nil {
+// 		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
+// 	}
 
-	err = ValidateToken(token)
-	if err != nil {
-		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
-	}
+// 	err = ValidateToken(token)
+// 	if err != nil {
+// 		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
+// 	}
 
-	claims, _ := token.Claims.(jwt.MapClaims)
+// 	claims, _ := token.Claims.(jwt.MapClaims)
 
-}
+// }

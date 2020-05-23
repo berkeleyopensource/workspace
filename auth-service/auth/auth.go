@@ -7,35 +7,20 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/joho/godotenv"
-	"github.com/sendgrid/sendgrid-go"
-	"github.com/sendgrid/sendgrid-go/helpers/mail"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"time"
-	"os"
-)
-
-var (
-	sendgridKey    string
-	sendgridClient *sendgrid.Client
-	defaultSender  = mail.NewEmail("Workspace Bot", "noreply@projectbot.arifulrigan.com")
-	defaultAPI     = "api.arifulrigan.com"
-	defaultScheme  = "http"
 )
 
 const (
-	jwtTokenSize    = 128
-	verifyTokenSize = 6
-	resetTokenSize  = 6
+	tokenSize = 6;
 )
 
 func generateRandomBytes(tokenSize int) ([]byte, error) {
 	token := make([]byte, tokenSize)
 	_, err := rand.Read(token)
-	// Note that err == nil only if we read len(b) bytes.
 	if err != nil {
 		return nil, err
 	}
@@ -49,15 +34,6 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handlePasswordReset)
 	mux.HandleFunc("/api/verify", handleEmailVerify)
-	mux.HandleFunc("api/refresh", handleTokenRefresh)
-	// Load sendgrid credentials
-	err := godotenv.Load()
-	if err != nil {
-		return err
-	}
-
-	sendgridKey = os.Getenv("SENDGRID_KEY")
-	sendgridClient = sendgrid.NewSendClient(sendgridKey)
 
 	return nil
 }
@@ -106,17 +82,6 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userRefreshToken(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
 func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
@@ -146,47 +111,16 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create access and refresh tokens to be kept as cookies.
-	// TODO: come up with a better abstraction for any fields.
+	// Create a new random session token
+	sessionToken := uuid.New().String();
 
-	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	// TODO: Push session token to redis cache on resource server
 
-	var accessToken string
-	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
-		"EmailVerified": verified,
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
+	// Set the client cookie
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
-		Expires: accessExpiresAt,
-	})
-
-	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
-	var refreshToken string
-	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
-		"ExpiresAt": refreshExpiresAt.Unix(),
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
-		Expires: refreshExpiresAt,
+		Name: "sessionToken",
+		Value: sessionToken,
+		Expires: time.Now().Add(30 * 24 * time.Hour),
 	})
 
 	return
@@ -217,68 +151,38 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create a new random session token
+	sessionToken := uuid.New().String();
+
 	// Store (unverified) credentials into the database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken) VALUES ($1,$2, FALSE, NULL)", credentials.Email, string(hashedPassword))
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken) VALUES ($1, $2, FALSE, NULL, $3)", credentials.Email, string(hashedPassword), sessionToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Set the client cookie
+	http.SetCookie(w, &http.Cookie{
+		Name: "sessionToken",
+		Value: sessionToken,
+		Expires: time.Now().Add(30 * 24 * time.Hour),
+	})
+
 	// Send verification email
-	verifyToken, err := generateRandomBytes(verifyTokenSize)
+	verifyToken, err := generateRandomBytes(tokenSize)
 	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err = SendEmail(credentials.Email, "Email Verification", "signup-template.html", map[string]interface{}{ "Token": base64Token })
+	err = SendEmail(credentials.Email, "Email Verification", "templates/user-signup.html", map[string]interface{}{ "Token": base64Token })
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
-
-	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
-	var accessToken string
-	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
-		"EmailVerified": false,
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
-		Expires: accessExpiresAt,
-	})
-
-	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
-	var refreshToken string
-	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
-		"ExpiresAt": refreshExpiresAt.Unix(),
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
-		Expires: refreshExpiresAt,
-	})
-
+	
 	return
 }
 
@@ -297,7 +201,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	if (credentials.Email != "" && credentials.Password == "") {
 
 		// Create a password reset token
-		token, err := generateRandomBytes(resetTokenSize)
+		token, err := generateRandomBytes(tokenSize)
 		base64Token := base64.StdEncoding.EncodeToString(token)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -311,7 +215,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create email with password reset link
-		err = SendEmail(credentials.Email, "Password Reset", "reset-template.html", map[string]interface{}{ "Token": base64Token })
+		err = SendEmail(credentials.Email, "Password Reset", "templates/password-reset.html", map[string]interface{}{ "Token": base64Token })
 		if err != nil {
 			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -334,8 +238,26 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var oldSessionToken string	
+		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", credentials.Token).Scan(&oldSessionToken)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
+			} else {
+				http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
+			}
+			return
+		}		
+
+		// Create a new random session token
+		newSessionToken := uuid.New().String();
+
+		// redis cache del oldSessionToken
+		// redis cache set newSessionToken
+
+
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, "", credentials.Token)
+		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, credentials.Token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -344,8 +266,6 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-
-		// TODO: Invalidate all sessions by issuing new refresh token
 
 		// Return with 204 response		
 		w.WriteHeader(http.StatusNoContent)
@@ -377,92 +297,26 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	if invalid == "false" {
 		_, err := database.DB.Exec("DELETE FROM users WHERE token=$1", token)
 		if err != nil {
-			log.Print(errors.New("error deleting email corresponding to token"))
-			http.Error(w, errors.New("error deleting email corresponding to token").Error(), http.StatusInternalServerError)
+			if err == sql.ErrNoRows {
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
+				log.Print(errors.New("No account is associated with this token."))
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 		}
 
 	// Verify user account
 	} else {
 		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, token)
 		if err != nil {
-			log.Print(errors.New("error finding email corresponding to token"))
-			http.Error(w, errors.New("error finding email corresponding to token").Error(), http.StatusInternalServerError)
+			if err == sql.ErrNoRows {
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
+				log.Print(errors.New("No account is associated with this token."))
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 		}
 	}
-
-	//get email of the user
-	var email string
-	// Check if email exists
-	err := database.DB.QueryRow("SELECT email FROM users WHERE token = $1", token).Scan(&email)
-	if err == sql.ErrNoRows {
-		http.Error(w, errors.New("user email not found, server error").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
-	var accessToken string
-	accessToken, err = NewClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": email,
-		"EmailVerified": true,
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
-		Value: accessToken,
-		Expires: accessExpiresAt,
-	})
-
-	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-
-	var refreshToken string
-	refreshToken, err = NewClaims(map[string]interface{}{
-		"Subject": "refresh", 
-		"ExpiresAt": refreshExpiresAt.Unix(),
-	})
-
-	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
-		Value: refreshToken,
-		Expires: refreshExpiresAt,
-	})
 
 	return
-}
-
-func userRefreshToken(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := ExtractToken(r, "refresh_token")
-	if err != nil {
-		if (err == http.ErrNoCookie) {
-			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
-		} else {
-			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
-		}
-		return
-	}
-
-	token, err := VerifyToken(refreshToken)
-	if err != nil {
-		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
-	}
-
-	err = ValidateToken(token)
-	if err != nil {
-		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
-	}
-
-	claims, _ := token.Claims.(jwt.MapClaims)
-
 }

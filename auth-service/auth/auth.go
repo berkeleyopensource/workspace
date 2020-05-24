@@ -1,17 +1,17 @@
 package auth
 
 import (
+	"log"
+	"time"
+	"net/http"
 	"crypto/rand"
 	"database/sql"
+	"errors"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"golang.org/x/crypto/bcrypt"
+	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
-	"log"
-	"net/http"
-	"time"
 )
 
 const (
@@ -34,6 +34,7 @@ func RegisterRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/signup", handleSignUp)
 	mux.HandleFunc("/api/reset", handlePasswordReset)
 	mux.HandleFunc("/api/verify", handleEmailVerify)
+	mux.HandleFunc("/api/refresh", handleTokenRefresh)
 
 	return nil
 }
@@ -82,6 +83,17 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		userTokenRefresh(w, r)
+		return
+	default:
+		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
+		return
+	}
+}
+
 func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
@@ -114,7 +126,12 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	// Create a new random session token
 	sessionToken := uuid.New().String();
 
-	// TODO: Push session token to redis cache on resource server
+	// Push session token to redis cache
+	_, err = cache.Do("SETEX", sessionToken, "2592000", credentials.Email)
+	if err != nil {
+		http.Error(w, errors.New("Error caching sessionToken.").Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Set the client cookie
 	http.SetCookie(w, &http.Cookie{
@@ -154,7 +171,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Create a new random session token
 	sessionToken := uuid.New().String();
 
-	// Store (unverified) credentials into the database
+	// Store credentials in database
 	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken) VALUES ($1, $2, FALSE, NULL, $3)", credentials.Email, string(hashedPassword), sessionToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -187,13 +204,11 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func userPasswordReset(w http.ResponseWriter, r *http.Request) {
-
-	// Decode json credentials
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		http.Error(w, errors.New("Error decoding json body.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -249,12 +264,14 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}		
 
+		// Add oldSessionToken to list of revoked tokens
+		err = setRevokedItem(oldSessionToken, RevokedItem{ invalid: true })
+		if err != nil {
+			return
+		}
+
 		// Create a new random session token
 		newSessionToken := uuid.New().String();
-
-		// redis cache del oldSessionToken
-		// redis cache set newSessionToken
-
 
 		// Update the password field and remove reset token to prevent invalid re-use
 		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, credentials.Token)
@@ -277,6 +294,13 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 }
 
 func userEmailVerify(w http.ResponseWriter, r *http.Request) {
+	credentials := Credentials{}
+	err := json.NewDecoder(r.Body).Decode(&credentials)
+	if err != nil {
+		log.Print(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// Unpack verification token and invalid fields.
 	queryParam, ok := r.URL.Query()["token"]
@@ -319,4 +343,28 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	return
+}
+
+func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
+	refreshToken, err := ExtractToken(r, "refresh_token")
+	if err != nil {
+		if (err == http.ErrNoCookie) {
+			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
+		} else {
+			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
+		}
+		return
+	}
+
+	token, err := VerifyToken(refreshToken)
+	if err != nil {
+		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
+	}
+
+	err = ValidateToken(token)
+	if err != nil {
+		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
+	}
+
+	claims, _ := token.Claims.(jwt.MapClaims)	
 }

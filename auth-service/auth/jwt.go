@@ -13,15 +13,14 @@ var (
 	jwtKey                  = []byte("my_secret_key")
 )
 
-func setClaims(data map[string]interface{}) (tokenString string, Error error) {
-	claims := jwt.StandardClaims{
-		"Issuer":    defaultJWTIssuer,
-		"IssuedAt":  time.Now().Unix(),
-	}
-	for key, val := range data {
-    claims[key] = val
-	}
+type AuthClaims struct {
+	Email string
+	EmailVerified bool
+	SessionToken string
+	jwt.StandardClaims
+}
 
+func setClaims(claims AuthClaims) (tokenString string, Error error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
@@ -30,16 +29,16 @@ func setClaims(data map[string]interface{}) (tokenString string, Error error) {
 	return tokenString, err
 }
 
-func getClaims(tokenString string) (data map[string]interface{}, Error error) {
-	claims := jwt.StandardClaims{}
+func getClaims(tokenString string) (claims AuthClaims, Error error) {
+	claims = AuthClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
 	if err != nil {
-		return nil, err
+		return AuthClaims{}, err
 	}
 	if !token.Valid	{
-		return nil, errors.New("The given token is not valid")
+		return AuthClaims{}, errors.New("The given token is not valid")
 	}
 	return claims, nil	
 }

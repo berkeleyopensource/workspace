@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
+	"github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -126,12 +127,16 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	// Set access token as a cookie.
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var accessToken string
-	accessToken, err = setClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
-		"EmailVerified": verified,
-		"SessionToken": sessionToken,
+	accessToken, err = setClaims(AuthClaims{
+		Email: credentials.Email,
+		EmailVerified: verified,
+		SessionToken: sessionToken,
+		StandardClaims: jwt.StandardClaims{
+			Subject: "access", 
+			ExpiresAt: accessExpiresAt.Unix(),
+			Issuer: defaultJWTIssuer,
+			IssuedAt: time.Now().Unix(),
+		},
 	})
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
@@ -146,11 +151,16 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	// Set refresh token as a cookie.
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
-	refreshToken, err = setClaims(map[string]interface{}{
-		"Subject": "refresh", 
-		"ExpiresAt": refreshExpiresAt.Unix(),
-		"SessionToken": sessionToken,
+	refreshToken, err = setClaims(AuthClaims{
+		SessionToken: sessionToken,
+		StandardClaims: jwt.StandardClaims{
+			Subject: "refresh", 
+			ExpiresAt: refreshExpiresAt.Unix(),
+			Issuer: defaultJWTIssuer,
+			IssuedAt: time.Now().Unix(),
+		},
 	})
+
 	if err != nil {
 		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
 		return
@@ -210,13 +220,19 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Set access token as a cookie.
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var accessToken string
-	accessToken, err = setClaims(map[string]interface{}{
-		"Subject": "access", 
-		"ExpiresAt": accessExpiresAt.Unix(),
-		"Email": credentials.Email,
-		"EmailVerified": false,
-		"SessionToken": sessionToken,
+	accessToken, err = setClaims(AuthClaims{
+		Email: credentials.Email,
+		EmailVerified: false,
+		SessionToken: sessionToken,
+		StandardClaims: jwt.StandardClaims{
+			Subject: "access", 
+			ExpiresAt: accessExpiresAt.Unix(),
+			Issuer: defaultJWTIssuer,
+			IssuedAt: time.Now().Unix(),
+		},
 	})
+
+	
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 		return
@@ -230,11 +246,16 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Set refresh token as a cookie.
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
-	refreshToken, err = setClaims(map[string]interface{}{
-		"Subject": "refresh", 
-		"ExpiresAt": refreshExpiresAt.Unix(),
-		"SessionToken": sessionToken,
+	refreshToken, err = setClaims(AuthClaims{
+		SessionToken: sessionToken,
+		StandardClaims: jwt.StandardClaims{
+			Subject: "refresh", 
+			ExpiresAt: refreshExpiresAt.Unix(),
+			Issuer: defaultJWTIssuer,
+			IssuedAt: time.Now().Unix(),
+		},
 	})
+
 	if err != nil {
 		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
 		return
@@ -410,13 +431,18 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		// Set access token as a cookie.
 		var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 		var accessToken string
-		accessToken, err = setClaims(map[string]interface{}{
-			"Subject": "access", 
-			"ExpiresAt": accessExpiresAt.Unix(),
-			"Email": email,
-			"EmailVerified": true,
-			"SessionToken": sessionToken,
+		accessToken, err = setClaims(AuthClaims{
+			Email: email,
+			EmailVerified: true,
+			SessionToken: sessionToken,
+			StandardClaims: jwt.StandardClaims{
+				Subject: "access", 
+				ExpiresAt: accessExpiresAt.Unix(),
+				Issuer: defaultJWTIssuer,
+				IssuedAt: time.Now().Unix(),
+			},
 		})
+
 		if err != nil {
 			http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 			return
@@ -453,8 +479,8 @@ func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	// Check if refreshToken has been revoked and invalidated.
 	var revoked RevokedItem
 	err = getRevokedItem(claims.SessionToken, revoked)
-	if err != nil || (revoked != nil && revoked.invalid) {
-		http.Error(w, err, http.StatusUnauthorized)
+	if err != nil || (revoked != RevokedItem{} && revoked.invalid) {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -470,7 +496,7 @@ func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Check if accessToken has stale claims.
 	oldAccessToken := accessCookie.Value
-	if (revoked != nil && revoked.stale) {
+	if (revoked != RevokedItem{} && revoked.stale != "") {
 		oldAccessToken = revoked.stale
 	}
 
@@ -482,7 +508,7 @@ func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Update expiration time of accessToken claims.
 	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
-	claims["ExpiresAt"] = accessExpiresAt.Unix()
+	claims.StandardClaims.ExpiresAt = accessExpiresAt.Unix()
 
 	// Set access token as a cookie.
 	var accessToken string

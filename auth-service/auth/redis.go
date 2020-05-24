@@ -2,6 +2,7 @@ package auth
 
 import (
 	"time"
+	"encoding/json"
 	"github.com/gomodule/redigo/redis"
 )
 
@@ -21,7 +22,7 @@ func init() {
 	}
 }
 
-func RevokedItemExpiry(val RevokedItem) {
+func RevokedItemExpiry(val RevokedItem) time.Duration {
 	if val.invalid {
 		return DefaultRefreshJWTExpiry
 	} else {
@@ -38,7 +39,7 @@ func getRevokedItem(key string, val RevokedItem) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(p, val)
+	return json.Unmarshal(resp.([]byte), val)
 }
 
 func setRevokedItem(key string, val RevokedItem) error {
@@ -50,6 +51,7 @@ func setRevokedItem(key string, val RevokedItem) error {
 	if err != nil {
 		return err
 	}
-	return conn.Do("SETEX", key, RevokedItemExpiry(val), resp);
+	_, err = conn.Do("SETEX", key, RevokedItemExpiry(val), resp)
+	return err
 }
 

@@ -1,9 +1,9 @@
 package auth
 
 import (
-	"github.com/dgrijalva/jwt-go"
-	"net/http"
 	"time"
+	"errors"
+	"github.com/dgrijalva/jwt-go"
 )
 
 var (
@@ -13,13 +13,11 @@ var (
 	jwtKey                  = []byte("my_secret_key")
 )
 
-func NewClaims(data map[string]interface{}) (string, error) {
-
-	claims := jwt.MapClaims{
+func setClaims(data map[string]interface{}) (tokenString string, Error error) {
+	claims := jwt.StandardClaims{
 		"Issuer":    defaultJWTIssuer,
 		"IssuedAt":  time.Now().Unix(),
 	}
-
 	for key, val := range data {
     claims[key] = val
 	}
@@ -32,39 +30,16 @@ func NewClaims(data map[string]interface{}) (string, error) {
 	return tokenString, err
 }
 
-func ExtractToken(r *http.Request, tokenName string) (string, error) {
-	c, err := r.Cookie(tokenName)
-	if err != nil {
-		return "", err
-	}
-	return c.Value, nil
-}
-
-func VerifyToken(tokenString string) (*jwt.Token, error) {
-	claims := jwt.MapClaims{}
+func getClaims(tokenString string) (data map[string]interface{}, Error error) {
+	claims := jwt.StandardClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
-	// do something with decoded claims
-	for key, val := range claims {
-		// fmt.Printf("Key: %v, value: %v\n", key, val)
+	if !token.Valid	{
+		return nil, errors.New("The given token is not valid")
 	}
-
-	return token, nil
-}
-
-func ValidateToken(token *jwt.Token) error {
-	token, err := VerifyToken(r)
-	if err != nil {
-		return err
-	}
-	if _, ok := token.Claims.(jwt.MapClaims); !ok && !token.Valid {
-		return err
-	}
-	return nil
+	return claims, nil	
 }

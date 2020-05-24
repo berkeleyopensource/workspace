@@ -17,7 +17,15 @@ func init() {
 	pool = &redis.Pool{MaxIdle: 10, IdleTimeout: 240 * time.Second, 
 		Dial: func() (redis.Conn, error) {
 			return redis.Dial("tcp", "localhost")
-		}
+		},
+	}
+}
+
+func RevokedItemExpiry(val RevokedItem) {
+	if val.invalid {
+		return DefaultRefreshJWTExpiry
+	} else {
+		return DefaultAccessJWTExpiry
 	}
 }
 
@@ -42,6 +50,6 @@ func setRevokedItem(key string, val RevokedItem) error {
 	if err != nil {
 		return err
 	}
-	return conn.Do("SETEX", key, DefaultAccessJWTExpiry, resp);
+	return conn.Do("SETEX", key, RevokedItemExpiry(val), resp);
 }
 

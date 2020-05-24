@@ -103,10 +103,10 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var hashedPassword string
+	var hashedPassword, sessionToken string
 	var verified bool
 
-	err = database.DB.QueryRow("select hashedPassword, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &verified)
+	err = database.DB.QueryRow("select hashedPassword, sessionToken, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &sessionToken, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
@@ -123,21 +123,42 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a new random session token
-	sessionToken := uuid.New().String();
-
-	// Push session token to redis cache
-	_, err = cache.Do("SETEX", sessionToken, "2592000", credentials.Email)
+	// Set access token as a cookie.
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var accessToken string
+	accessToken, err = setClaims(map[string]interface{}{
+		"Subject": "access", 
+		"ExpiresAt": accessExpiresAt.Unix(),
+		"Email": credentials.Email,
+		"EmailVerified": verified,
+		"SessionToken": sessionToken,
+	})
 	if err != nil {
-		http.Error(w, errors.New("Error caching sessionToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// Set the client cookie
 	http.SetCookie(w, &http.Cookie{
-		Name: "sessionToken",
-		Value: sessionToken,
-		Expires: time.Now().Add(30 * 24 * time.Hour),
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	// Set refresh token as a cookie.
+	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var refreshToken string
+	refreshToken, err = setClaims(map[string]interface{}{
+		"Subject": "refresh", 
+		"ExpiresAt": refreshExpiresAt.Unix(),
+		"SessionToken": sessionToken,
+	})
+	if err != nil {
+		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "refresh_token",
+		Value: refreshToken,
+		Expires: refreshExpiresAt,
 	})
 
 	return
@@ -171,21 +192,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Create a new random session token
 	sessionToken := uuid.New().String();
 
-	// Store credentials in database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken) VALUES ($1, $2, FALSE, NULL, $3)", credentials.Email, string(hashedPassword), sessionToken)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Set the client cookie
-	http.SetCookie(w, &http.Cookie{
-		Name: "sessionToken",
-		Value: sessionToken,
-		Expires: time.Now().Add(30 * 24 * time.Hour),
-	})
-
-	// Send verification email
+	// Create a new verification token
 	verifyToken, err := generateRandomBytes(tokenSize)
 	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
 	if err != nil {
@@ -193,6 +200,52 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store credentials in database
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), sessionToken, base64Token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Set access token as a cookie.
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var accessToken string
+	accessToken, err = setClaims(map[string]interface{}{
+		"Subject": "access", 
+		"ExpiresAt": accessExpiresAt.Unix(),
+		"Email": credentials.Email,
+		"EmailVerified": false,
+		"SessionToken": sessionToken,
+	})
+	if err != nil {
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	// Set refresh token as a cookie.
+	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var refreshToken string
+	refreshToken, err = setClaims(map[string]interface{}{
+		"Subject": "refresh", 
+		"ExpiresAt": refreshExpiresAt.Unix(),
+		"SessionToken": sessionToken,
+	})
+	if err != nil {
+		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "refresh_token",
+		Value: refreshToken,
+		Expires: refreshExpiresAt,
+	})
+
+	// Send verification email
 	err = SendEmail(credentials.Email, "Email Verification", "templates/user-signup.html", map[string]interface{}{ "Token": base64Token })
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
@@ -317,9 +370,9 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete user account if invalid field is false
+	// Delete account if invalid field is false
 	if invalid == "false" {
-		_, err := database.DB.Exec("DELETE FROM users WHERE token=$1", token)
+		_, err := database.DB.Exec("DELETE FROM users WHERE verifiedToken=$1", token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
@@ -331,7 +384,20 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 	// Verify user account
 	} else {
-		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE token=$2", true, token)
+
+		var email, sessionToken string	
+		err = database.DB.QueryRow("SELECT email, sessionToken from users where resetToken=$1", credentials.Token).Scan(&email, &sessionToken)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
+				log.Print(errors.New("No account is associated with this token."))
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}	
+
+		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE verifiedToken=$2", true, token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
@@ -340,31 +406,96 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}
+
+		// Set access token as a cookie.
+		var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+		var accessToken string
+		accessToken, err = setClaims(map[string]interface{}{
+			"Subject": "access", 
+			"ExpiresAt": accessExpiresAt.Unix(),
+			"Email": email,
+			"EmailVerified": true,
+			"SessionToken": sessionToken,
+		})
+		if err != nil {
+			http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Update list of stale tokens
+		err = setRevokedItem(sessionToken, RevokedItem{ stale: accessToken })
+		if err != nil {
+			return
+		}		
+
 	}
 
 	return
 }
 
 func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
-	refreshToken, err := ExtractToken(r, "refresh_token")
+	refreshCookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
-			http.Error(w, errors.New("Error no cookie.").Error(), http.StatusUnauthorized)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 		} else {
-			http.Error(w, errors.New("Error getting refreshToken.").Error(), http.StatusBadRequest)
+			http.Error(w, errors.New("Error retrieving refreshToken.").Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
-	token, err := VerifyToken(refreshToken)
+	claims, err := getClaims(refreshCookie.Value)
 	if err != nil {
-		http.Error(w, errors.New("Error Verifying Token").Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
 	}
 
-	err = ValidateToken(token)
-	if err != nil {
-		http.Error(w, errors.New("Error Validating Token").Error(), http.StatusBadRequest)
+	// Check if refreshToken has been revoked and invalidated.
+	var revoked RevokedItem
+	err = getRevokedItem(claims.SessionToken, revoked)
+	if err != nil || (revoked != nil && revoked.invalid) {
+		http.Error(w, err, http.StatusUnauthorized)
+		return
 	}
 
-	claims, _ := token.Claims.(jwt.MapClaims)	
+	accessCookie, err := r.Cookie("access_token")
+	if err != nil {
+		if (err == http.ErrNoCookie) {
+			http.Error(w, errors.New("Error there is no cookie.").Error(), http.StatusUnauthorized)
+		} else {
+			http.Error(w, errors.New("Error retrieving accessToken.").Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Check if accessToken has stale claims.
+	oldAccessToken := accessCookie.Value
+	if (revoked != nil && revoked.stale) {
+		oldAccessToken = revoked.stale
+	}
+
+	claims, err = getClaims(oldAccessToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Update expiration time of accessToken claims.
+	var accessExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	claims["ExpiresAt"] = accessExpiresAt.Unix()
+
+	// Set access token as a cookie.
+	var accessToken string
+	accessToken, err = setClaims(claims)
+	if err != nil {
+		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: "access_token",
+		Value: accessToken,
+		Expires: accessExpiresAt,
+	})
+
+	return
 }

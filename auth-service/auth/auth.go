@@ -267,7 +267,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Send verification email
-	err = SendEmail(credentials.Email, "Email Verification", "templates/user-signup.html", map[string]interface{}{ "Token": base64Token })
+	err = SendEmail(credentials.Email, "Email Verification", "user-signup.html", map[string]interface{}{ "Token": base64Token })
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -304,7 +304,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Create email with password reset link
-		err = SendEmail(credentials.Email, "Password Reset", "templates/password-reset.html", map[string]interface{}{ "Token": base64Token })
+		err = SendEmail(credentials.Email, "Password Reset", "password-reset.html", map[string]interface{}{ "Token": base64Token })
 		if err != nil {
 			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -479,9 +479,18 @@ func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	// Check if refreshToken has been revoked and invalidated.
 	var revoked RevokedItem
 	err = getRevokedItem(claims.SessionToken, revoked)
-	if err != nil || (revoked != RevokedItem{} && revoked.invalid) {
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
+	}
+
+	// Clear cookies if refreshToken is revoked.
+	if revoked != RevokedItem{} && revoked.invalid {
+		var expiresAt = time.Now().Add(-1 * time.Second)
+		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: nil, Expires: expiresAt})
+		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: nil, Expires: expiresAt})
+		http.Error(w, errors.New("The refreshToken has been revoked."), http.StatusUnauthorized)
+		return		
 	}
 
 	accessCookie, err := r.Cookie("access_token")

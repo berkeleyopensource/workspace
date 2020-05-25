@@ -35,11 +35,11 @@ func getRevokedItem(key string, val RevokedItem) error {
 	conn := pool.Get()
 	defer conn.Close()
 
-	resp, err := conn.Do("GET", key)
+	resp, err := redis.Bytes(conn.Do("GET", key))
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(resp.([]byte), val)
+	return json.Unmarshal(resp, val)
 }
 
 func setRevokedItem(key string, val RevokedItem) error {

@@ -31,7 +31,7 @@ func init() {
 func SendEmail(recipient string, subject string, templatePath string, data map[string]interface{}) error {
 	// Parse template file and execute with data.
 	var html bytes.Buffer
-	tmpl, err := template.ParseFiles(templatePath)
+	tmpl, err := template.ParseFiles("./auth/templates/" + templatePath)
 	if err != nil {
 		return err
 	}

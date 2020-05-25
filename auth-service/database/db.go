@@ -16,7 +16,9 @@ func InitializeUsersTable() error {
 			email VARCHAR(320),
 			hashedPassword TEXT,
 			verified boolean,
-			resetToken TEXT
+			resetToken TEXT,
+			verifiedToken TEXT,
+			sessionToken uuid
 		)`)
 	if err != nil {
 		fmt.Println(err.Error())

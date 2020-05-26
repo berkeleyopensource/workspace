@@ -13,6 +13,7 @@ import (
 	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
 )
 
 const (
@@ -28,79 +29,21 @@ func generateRandomBytes(tokenSize int) ([]byte, error) {
 	return token, nil
 }
 
-func RegisterRoutes(mux *http.ServeMux) error {
-
-	// Initialize routes
-	mux.HandleFunc("/api/signin", handleSignIn)
-	mux.HandleFunc("/api/signup", handleSignUp)
-	mux.HandleFunc("/api/reset", handlePasswordReset)
-	mux.HandleFunc("/api/verify", handleEmailVerify)
-	mux.HandleFunc("/api/refresh", handleTokenRefresh)
-
+func RegisterRoutes(router *mux.Router) error {
+	router.HandleFunc("/api/signin", handleSignIn).Methods(http.MethodPost)
+	router.HandleFunc("/api/signup", handleSignUp).Methods(http.MethodPost)
+	router.HandleFunc("/api/reset", handlePasswordReset).Methods(http.MethodPost)
+	router.HandleFunc("/api/verify", handleEmailVerify).Methods(http.MethodPost)
+	router.HandleFunc("/api/refresh", handleTokenRefresh).Methods(http.MethodPost)
 	return nil
 }
 
 func handleSignIn(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userSignIn(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func handleSignUp(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userSignUp(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userPasswordReset(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userEmailVerify(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		userTokenRefresh(w, r)
-		return
-	default:
-		http.Error(w, errors.New("Only POST requests are allowed on this endpoint.").Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func userSignIn(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -113,6 +56,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
 		} else {
 			http.Error(w, errors.New("Error retrieving information with this email.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 		}
 		return
 	}
@@ -140,6 +84,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -163,6 +108,7 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -174,12 +120,12 @@ func userSignIn(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func userSignUp(w http.ResponseWriter, r *http.Request) {
+func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -194,8 +140,8 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	// Hash the password using bcrypt
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Print(err.Error())
 		http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -207,6 +153,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -214,6 +161,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), sessionToken, base64Token)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -235,6 +183,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -258,6 +207,7 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -277,12 +227,12 @@ func userSignUp(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func userPasswordReset(w http.ResponseWriter, r *http.Request) {
+func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -294,6 +244,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		base64Token := base64.StdEncoding.EncodeToString(token)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 			return
 		}
 
@@ -322,8 +273,8 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 		// Hash the password using bcrypt
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 		if err != nil {
-			log.Print(err.Error())
 			http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 			return
 		}
 
@@ -334,6 +285,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
 			}
 			return
 		}		
@@ -354,6 +306,7 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
 			}
 			return
 		}
@@ -367,12 +320,12 @@ func userPasswordReset(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func userEmailVerify(w http.ResponseWriter, r *http.Request) {
+func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		log.Print(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -396,10 +349,10 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		_, err := database.DB.Exec("DELETE FROM users WHERE verifiedToken=$1", token)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
-				log.Print(errors.New("No account is associated with this token."))
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
 			}
 		}
 
@@ -410,10 +363,10 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		err = database.DB.QueryRow("SELECT email, sessionToken from users where resetToken=$1", credentials.Token).Scan(&email, &sessionToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
-				log.Print(errors.New("No account is associated with this token."))
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
 			}
 			return
 		}	
@@ -421,10 +374,10 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE verifiedToken=$2", true, token)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusInternalServerError)
-				log.Print(errors.New("No account is associated with this token."))
+				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
 			} else {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
 			}
 		}
 
@@ -445,6 +398,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 			return
 		}
 
@@ -459,7 +413,7 @@ func userEmailVerify(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
+func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	refreshCookie, err := r.Cookie("refresh_token")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
@@ -485,11 +439,11 @@ func userTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear cookies if refreshToken is revoked.
-	if revoked != RevokedItem{} && revoked.invalid {
+	if (revoked != RevokedItem{} && revoked.invalid == true) {
 		var expiresAt = time.Now().Add(-1 * time.Second)
-		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: nil, Expires: expiresAt})
-		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: nil, Expires: expiresAt})
-		http.Error(w, errors.New("The refreshToken has been revoked."), http.StatusUnauthorized)
+		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
+		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
+		http.Error(w, errors.New("The refreshToken has been revoked.").Error(), http.StatusUnauthorized)
 		return		
 	}
 

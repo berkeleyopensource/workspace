@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"encoding/json"
+	"crypto/sha256"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
@@ -147,7 +148,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	// Hash the password using bcrypt
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error hashing password.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -180,8 +181,6 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 			IssuedAt: time.Now().Unix(),
 		},
 	})
-
-	
 	if err != nil {
 		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -243,8 +242,11 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		// Create a password reset token
 		resetToken := getRandomBase62(tokenSize)
 
-		// Store reset token into database
-		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", resetToken, credentials.Email)
+		// Hash the reset token using SHA-256
+		hashedResetToken := sha256.Sum256([]byte(resetToken))
+
+		// Store the hashed reset token in database
+		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", hashedResetToken, credentials.Email)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
@@ -273,8 +275,11 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Hash the reset token using SHA-256
+		hashedResetToken := sha256.Sum256([]byte(credentials.Token))
+
 		var oldSessionToken string	
-		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", credentials.Token).Scan(&oldSessionToken)
+		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", hashedResetToken).Scan(&oldSessionToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -284,7 +289,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}		
-		log.Print("found token")
+
 		// Add oldSessionToken to list of revoked tokens
 		err = setRevokedItem(oldSessionToken, RevokedItem{ invalid: true })
 		if err != nil {
@@ -292,14 +297,12 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			log.Print(err.Error())
 			return
 		}
-		log.Print("revokedsessiontoken")
 
 		// Create a new random session token
 		newSessionToken := uuid.New().String();
-		log.Print("about to update")
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, credentials.Token)
+		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, hashedResetToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)

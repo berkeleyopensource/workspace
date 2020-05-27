@@ -3,32 +3,38 @@
     <title>Workspace Email Verification</title>
     <style>
       @import url('https://rsms.me/inter/inter.css');
-      .heading {
-          padding: 5vh 5vw 2.5vh 5vw;
+      .container {
+        font-family: 'Inter', sans-serif; 
+        max-width: 600px;
+        padding: 32px 64px;
+        padding-bottom: 0;
+        margin: auto;
       }
       .heading img {
-          width: 10em;
-          box-sizing: border-box;
+        width: 10em;
+        box-sizing: border-box;
       }
-      .content {
-          font-family: 'Inter', sans-serif; 
-          padding: 2.5vh 5vw;
-          max-width: 90vw;
+      .content h1 {
+        font-size: 20px;
+        font-weight: 700;
+        color: #333;
       }
-      .content h3 {
-          font-weight: 500;
+      .content p {
+        margin-top: 12px;
       }
     </style>
   </head>
   <body>
-    <div class="heading">
-      <img src="http://cdn.mcauto-images-production.sendgrid.net/33a5b518274582dc/02902907-42c6-43b2-ada8-d36eebde562a/2818x450.png">
-    </div>
-    <div class="content">
-      <h3>We need you to verify your email.</h3>
-      <p>To finish setting up your account, <a href="https://workspace.com/verify?token={{.Token}}">click here</a> to verify your email.</p>
-      <p style="color: #aaaaaa">If you did not sign up for an account, <a href="https://workspace.com/verify?token={{.Token}}&invalid">click here</a> 
-      instead to remove your email address from our database.</p>
-    </div>
+    <div class="container">>
+      <div class="heading">
+        <img src="http://cdn.mcauto-images-production.sendgrid.net/33a5b518274582dc/02902907-42c6-43b2-ada8-d36eebde562a/2818x450.png">
+      </div>
+      <div class="content">
+        <h1>We need you to verify your email.</h1>
+        <p>To finish setting up your account, <a href="https://workspace.com/verify?token={{.Token}}">click here</a> to verify your email.</p>
+        <p style="color: #aaaaaa">If you did not sign up for an account, <a href="https://workspace.com/verify?token={{.Token}}&invalid">click here</a> 
+        instead to remove your email address from our database.</p>
+      </div>
+    </div
   </body>
 </html>

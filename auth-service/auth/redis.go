@@ -17,16 +17,16 @@ var pool *redis.Pool
 func init() {
 	pool = &redis.Pool{MaxIdle: 10, IdleTimeout: 240 * time.Second, 
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", "localhost")
+			return redis.Dial("tcp", "redis:6379")
 		},
 	}
 }
 
-func RevokedItemExpiry(val RevokedItem) time.Duration {
+func RevokedItemExpiry(val RevokedItem) int {
 	if val.invalid {
-		return DefaultRefreshJWTExpiry
+		return int((DefaultRefreshJWTExpiry).Round(time.Second).Seconds())
 	} else {
-		return DefaultAccessJWTExpiry
+		return int((DefaultAccessJWTExpiry).Round(time.Second).Seconds())
 	}
 }
 

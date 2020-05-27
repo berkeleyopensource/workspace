@@ -4,10 +4,9 @@ import (
 	"log"
 	"time"
 	"net/http"
-	"crypto/rand"
+	"math/rand"
 	"database/sql"
 	"errors"
-	"encoding/base64"
 	"encoding/json"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
@@ -17,16 +16,17 @@ import (
 )
 
 const (
-	tokenSize = 6;
+	tokenSize = 8;
 )
 
-func generateRandomBytes(tokenSize int) ([]byte, error) {
-	token := make([]byte, tokenSize)
-	_, err := rand.Read(token)
-	if err != nil {
-		return nil, err
+func getRandomBase62(length int) string {
+	const base62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	rand.Seed(time.Now().Unix())
+	r := make([]byte, length)
+	for i := range r {
+		r[i] = base62[rand.Intn(len(base62))]
 	}
-	return token, nil
+	return string(r)
 }
 
 func RegisterRoutes(router *mux.Router) error {
@@ -36,6 +36,13 @@ func RegisterRoutes(router *mux.Router) error {
 	router.HandleFunc("/api/verify", handleEmailVerify).Methods(http.MethodPost)
 	router.HandleFunc("/api/refresh", handleTokenRefresh).Methods(http.MethodPost)
 	return nil
+}
+
+type Credentials struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Token    string `json:"token"`
+	Invalid  bool   `json:"invalid"`
 }
 
 func handleSignIn(w http.ResponseWriter, r *http.Request) {
@@ -149,16 +156,10 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	sessionToken := uuid.New().String();
 
 	// Create a new verification token
-	verifyToken, err := generateRandomBytes(tokenSize)
-	base64Token := base64.StdEncoding.EncodeToString(verifyToken)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		log.Print(err.Error())
-		return
-	}
+	verifyToken := getRandomBase62(tokenSize)
 
 	// Store credentials in database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), sessionToken, base64Token)
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), sessionToken, verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -217,7 +218,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Send verification email
-	err = SendEmail(credentials.Email, "Email Verification", "user-signup.html", map[string]interface{}{ "Token": base64Token })
+	err = SendEmail(credentials.Email, "Email Verification", "user-signup.html", map[string]interface{}{ "Token": verifyToken })
 	if err != nil {
 		http.Error(w, errors.New("Error sending verification email.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -240,22 +241,16 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	if (credentials.Email != "" && credentials.Password == "") {
 
 		// Create a password reset token
-		token, err := generateRandomBytes(tokenSize)
-		base64Token := base64.StdEncoding.EncodeToString(token)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			log.Print(err.Error())
-			return
-		}
+		resetToken := getRandomBase62(tokenSize)
 
 		// Store reset token into database
-		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", base64Token, credentials.Email)
+		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", resetToken, credentials.Email)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
 
 		// Create email with password reset link
-		err = SendEmail(credentials.Email, "Password Reset", "password-reset.html", map[string]interface{}{ "Token": base64Token })
+		err = SendEmail(credentials.Email, "Password Reset", "password-reset.html", map[string]interface{}{ "Token": resetToken })
 		if err != nil {
 			http.Error(w, errors.New("Error sending password reset email.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -289,18 +284,22 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}		
-
+		log.Print("found token")
 		// Add oldSessionToken to list of revoked tokens
 		err = setRevokedItem(oldSessionToken, RevokedItem{ invalid: true })
 		if err != nil {
+			http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 			return
 		}
+		log.Print("revokedsessiontoken")
 
 		// Create a new random session token
 		newSessionToken := uuid.New().String();
+		log.Print("about to update")
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET password=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, credentials.Token)
+		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, credentials.Token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)

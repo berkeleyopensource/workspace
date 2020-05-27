@@ -24,7 +24,6 @@ func main() {
 
 	// Initialize postgres database.
 	err = initDB()
-	defer database.DB.Close()
 	if err != nil {
 		log.Fatal("Error initializing database")
 	}

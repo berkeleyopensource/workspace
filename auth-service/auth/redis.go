@@ -7,8 +7,9 @@ import (
 )
 
 type RevokedItem struct {
-	invalid bool // refresh token
-	stale string // jwt token
+	IssuedAt int64 // unix timestamp of when RevokedItem was issued
+	Invalid bool // used to invalidate all refreshTokens before IssuedAt
+	NewClaims string // used to update all accessTokens before IssuedAt
 }
 
 // Declare a pool variable to hold the pool of Redis connections.
@@ -23,7 +24,7 @@ func init() {
 }
 
 func RevokedItemExpiry(val RevokedItem) int {
-	if val.invalid {
+	if val.Invalid {
 		return int((DefaultRefreshJWTExpiry).Round(time.Second).Seconds())
 	} else {
 		return int((DefaultAccessJWTExpiry).Round(time.Second).Seconds())

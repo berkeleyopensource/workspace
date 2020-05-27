@@ -267,19 +267,12 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	// 2nd pass: token, no email
 	if (credentials.Email == "" && credentials.Password != "") {
 
-		// Hash the password using bcrypt
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
-		if err != nil {
-			http.Error(w, errors.New("Error hashing password").Error(), http.StatusInternalServerError)
-			log.Print(err.Error())
-			return
-		}
-
 		// Hash the reset token using SHA-256
 		hashedResetToken := sha256.Sum256([]byte(credentials.Token))
 
-		var oldSessionToken string	
-		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", hashedResetToken).Scan(&oldSessionToken)
+		//  Get the sessionToken associated with the reset token.
+		var sessionToken string	
+		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", hashedResetToken).Scan(&sessionToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -290,19 +283,24 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}		
 
-		// Add oldSessionToken to list of revoked tokens
-		err = setRevokedItem(oldSessionToken, RevokedItem{ invalid: true })
+		// Add sessionToken to list of revoked tokens.
+		err = setRevokedItem(sessionToken, RevokedItem{ Invalid: true, IssuedAt: time.Now().Unix() })
 		if err != nil {
 			http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
 			return
 		}
 
-		// Create a new random session token
-		newSessionToken := uuid.New().String();
+		// Hash the password using bcrypt
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
+		if err != nil {
+			http.Error(w, errors.New("Error hashing password.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
+			return
+		}
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, sessionToken=$3 WHERE resetToken=$4", hashedPassword, "", newSessionToken, hashedResetToken)
+		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, WHERE resetToken=$3", hashedPassword, "", hashedResetToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -405,7 +403,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update list of stale tokens
-		err = setRevokedItem(sessionToken, RevokedItem{ stale: accessToken })
+		err = setRevokedItem(sessionToken, RevokedItem{ NewClaims: accessToken, IssuedAt: time.Now().Unix() })
 		if err != nil {
 			return
 		}		
@@ -440,8 +438,8 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clear cookies if refreshToken is revoked.
-	if (revoked != RevokedItem{} && revoked.invalid == true) {
+	// Clear cookies if refreshToken has been revoked.
+	if (revoked != RevokedItem{} && claims.StandardClaims.IssuedAt < revoked.IssuedAt && revoked.Invalid == true) {
 		var expiresAt = time.Now().Add(-1 * time.Second)
 		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
 		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
@@ -459,10 +457,10 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if accessToken has stale claims.
+	// Check if accessToken has stale claims that can be updated from cache.
 	oldAccessToken := accessCookie.Value
-	if (revoked != RevokedItem{} && revoked.stale != "") {
-		oldAccessToken = revoked.stale
+	if (revoked != RevokedItem{} && claims.StandardClaims.IssuedAt < revoked.IssuedAt && revoked.NewClaims != "") {
+		oldAccessToken = revoked.NewClaims
 	}
 
 	claims, err = getClaims(oldAccessToken)

@@ -329,38 +329,20 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Unpack verification token and invalid fields.
-	queryParam, ok := r.URL.Query()["token"]
-	token := queryParam[0]
-	if !ok || len(queryParam[0]) < 1 {
-		log.Println("Url Param 'key' is missing")
-		return
-	}
+	// Delete account if invalid field is true
+	if credentials.Invalid {
 
-	queryParam, ok = r.URL.Query()["invalid"]
-	invalid := queryParam[0]
-	if !ok || len(queryParam[0]) < 1 {
-		log.Println("Url Param 'key' is missing")
-		return
-	}
-
-	// Delete account if invalid field is false
-	if invalid == "false" {
-		_, err := database.DB.Exec("DELETE FROM users WHERE verifiedToken=$1", token)
+		_, err := database.DB.Exec("DELETE FROM users WHERE verifiedToken=$1", credentials.Token)
 		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
-			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				log.Print(err.Error())
-			}
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 		}
 
 	// Verify user account
 	} else {
 
 		var email, sessionToken string	
-		err = database.DB.QueryRow("SELECT email, sessionToken from users where resetToken=$1", credentials.Token).Scan(&email, &sessionToken)
+		err = database.DB.QueryRow("SELECT email, sessionToken from users where verifiedToken=$1", credentials.Token).Scan(&email, &sessionToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
@@ -371,7 +353,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}	
 
-		_, err := database.DB.Exec("UPDATE users SET verified=$1 WHERE verifiedToken=$2", true, token)
+		_, err := database.DB.Exec("UPDATE users SET verified=$1, verifiedToken=$2 WHERE verifiedToken=$3", true, "", credentials.Token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
@@ -395,9 +377,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 				IssuedAt: time.Now().Unix(),
 			},
 		})
-
 		if err != nil {
-			http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
 			return
 		}
@@ -405,12 +385,10 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		// Update list of stale tokens
 		err = setRevokedItem(sessionToken, RevokedItem{ NewClaims: accessToken, IssuedAt: time.Now().Unix() })
 		if err != nil {
+			log.Print(err.Error())
 			return
-		}		
-
+		}
 	}
-
-	return
 }
 
 func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {

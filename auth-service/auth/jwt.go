@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	DefaultAccessJWTExpiry  =  5        * time.Minute // refresh every  5 minutes
+	DefaultAccessJWTExpiry  = 01 * 1440 * time.Minute // refresh every 01 days
 	DefaultRefreshJWTExpiry = 30 * 1440 * time.Minute // refresh every 30 days
 	defaultJWTIssuer        = "workspace-api"
 	jwtKey                  = []byte("my_secret_key")

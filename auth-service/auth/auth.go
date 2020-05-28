@@ -5,10 +5,10 @@ import (
 	"time"
 	"net/http"
 	"math/rand"
-	"database/sql"
 	"errors"
 	"encoding/json"
 	"crypto/sha256"
+	"database/sql"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
@@ -244,9 +244,10 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 
 		// Hash the reset token using SHA-256
 		hashedResetToken := sha256.Sum256([]byte(resetToken))
+		stringHashed := string(hashedResetToken[:])
 
 		// Store the hashed reset token in database
-		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", hashedResetToken, credentials.Email)
+		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", stringHashed, credentials.Email)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
@@ -269,10 +270,11 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 
 		// Hash the reset token using SHA-256
 		hashedResetToken := sha256.Sum256([]byte(credentials.Token))
+		stringHashed := string(hashedResetToken[:])
 
 		//  Get the sessionToken associated with the reset token.
 		var sessionToken string	
-		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", hashedResetToken).Scan(&sessionToken)
+		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", stringHashed).Scan(&sessionToken)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -300,7 +302,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2, WHERE resetToken=$3", hashedPassword, "", hashedResetToken)
+		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, nil, stringHashed)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)

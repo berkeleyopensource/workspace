@@ -1,6 +1,7 @@
 package auth 
 
 import (
+	"os"
 	"time"
 	"encoding/json"
 	"github.com/gomodule/redigo/redis"
@@ -12,13 +13,20 @@ type RevokedItem struct {
 	NewClaims string // used to update all accessTokens before IssuedAt
 }
 
+
 // Declare a pool variable to hold the pool of Redis connections.
 var pool *redis.Pool
 
 func init() {
 	pool = &redis.Pool{MaxIdle: 10, IdleTimeout: 240 * time.Second, 
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", "redis:6379")
+			conn, err := redis.Dial("tcp", os.Getenv("REDIS_URL"))
+			// Exponential backoff if unsuccessful connection.
+			for retries := 0; err != nil && retries < 5; retries++ {
+				time.Sleep((50 << retries) * time.Millisecond)
+				conn, err = redis.Dial("tcp", "redis:6379")
+			}
+			return conn, err
 		},
 	}
 }

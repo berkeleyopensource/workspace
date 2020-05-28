@@ -45,7 +45,7 @@ func main() {
 func initDB() error {
 	// database credentials
 	var (
-		host     = "172.28.1.1"
+		host     = "postgres"
 		port     = 5432
 		user     = "postgres"
 		password = os.Getenv("DB_PASSWORD")

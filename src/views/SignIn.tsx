@@ -44,6 +44,9 @@ class SignIn extends React.Component<any, FormState> {
           errors.password = error;
           form.password.focus()
           break;
+        default:
+          errors.email = error;
+          form.email.focus()
       }
       this.setState({errors});
     })

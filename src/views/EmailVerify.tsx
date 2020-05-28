@@ -12,10 +12,8 @@ class EmailVerify extends React.Component<RouteComponentProps, any> {
       token = params.get("token"), invalid = params.get("invalid");
 
     console.log(token, invalid);
-    fetch('http://xxx/api/verify', {
-      method: 'POST',
-      body: JSON.stringify({token, invalid}),
-    }).then(resp => console.log(resp)).catch(error => console.log(error));
+    fetch('http://xxx/api/verify', { method: 'POST', body: JSON.stringify({token, invalid})})
+      .then(resp => console.log(resp)).catch(error => console.log(error));
 
   }
   render() {

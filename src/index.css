@@ -2,12 +2,23 @@
 
 body {
   margin: 0;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: "Inter", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 code {
   font-family: "Fira Code", source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+:root {
+
+  --light-font-color: #000;
+  --dark-font-color: #fff;
+
+  --light-background-color: #fff;
+  
+  --dark-background-color: #37393F;
+  --dark-background-secondary-color: #2F3136;
+
 }

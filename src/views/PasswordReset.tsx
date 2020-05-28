@@ -5,31 +5,23 @@ import Navbar from "./components/Navbar";
 import './SignInUp.css';
 
 interface FormState {
-  errors: { email: String, password: String, [key: string]: any },
+  errors: { email: String, password: String, default: String, [key: string]: any },
   token: String,
-  valid: Boolean,
 }
 
 class PasswordReset extends React.Component<RouteComponentProps, FormState> {
   constructor(props: any) {
     super(props);
-    this.state = {errors: {email: "", password: ""}, token: "", valid: true};
+    this.state = {errors: {email: "", password: "", default: ""}, token: ""};
   }
   
   handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const form = event.target as HTMLFormElement,
-      email = form.email.value;
-    
+      email = form.email ? form.email.value : "", password = form.password ? form.password.value : "";
     const { errors } = this.state;
-    // TODO: hook this up to backend api.
-
-    fetch('http://xxx/api/reset', {
-      method: 'POST',
-      body: JSON.stringify({email}),
-    }).then(resp => console.log(resp)).catch(error => console.log(error));
-
+    fetch('http://api.arifulrigan.com/api/reset', {method: 'POST', body: JSON.stringify({email, password, token: this.state.token})})
+      .then(resp => resp.ok ? this.props.history.push("/") : resp.text().then(error => this.handleErrors(error, form)));
     this.setState({errors});
   }
   handleChange = (event: React.FormEvent<HTMLInputElement>) => {
@@ -39,10 +31,26 @@ class PasswordReset extends React.Component<RouteComponentProps, FormState> {
     this.setState({errors});
   }
 
+  handleErrors = (error: any, form: HTMLFormElement) => {
+    const { errors } = this.state;
+    errors.email = ""; errors.password = "";
+    if (error.includes("email")) {
+      errors.email = error;
+      form.email.focus();
+    } else if (error.includes("password")) {
+      errors.password = error;
+      form.password.focus();
+    } else {
+      errors.default = error;
+    }
+    this.setState({errors});
+  }
+
   componentDidMount() {
     const params = new URLSearchParams(this.props.location.search),
-      token = params.get("token") || "", valid = params.get("valid") ? true : false;
-    this.setState({token: token, valid: valid});
+      token = decodeURIComponent(params.get("token") || "")
+    console.log("hi", token, params.get("token"))
+    this.setState({token: token});
   }
 
   render() {
@@ -50,7 +58,7 @@ class PasswordReset extends React.Component<RouteComponentProps, FormState> {
       <div className="SignInUp">
         <Navbar/>
         <form onSubmit={this.handleSubmit}>
-          { this.state.token == ""
+          { this.state.token === ""
             ? <div>
                 <h2>Reset your password.</h2>
                 <div className={"input-group " + (this.state.errors.email ? "input-error" : "")}>

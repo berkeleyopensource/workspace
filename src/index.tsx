@@ -10,22 +10,24 @@ import PasswordReset from "./views/PasswordReset"
 import Workspace from "./views/Workspace";
 import Settings from "./views/Settings";
 import EmailVerify from "./views/EmailVerify";
+import NotFound from "./views/NotFound";
 
 import * as serviceWorker from './serviceWorker';
 
-import { BrowserRouter, Route } from "react-router-dom";
+import { BrowserRouter, Route, Switch } from "react-router-dom";
 
 ReactDOM.render(
   <BrowserRouter>
-    <div>
-      <Route path="/" exact component={ Landing } />
-      <Route path="/signin" component={ SignIn } />
-      <Route path="/signup" component={ SignUp } />
-      <Route path="/workspace" component={ Workspace } />
-      <Route path="/settings" component={ Settings } />
-      <Route path="/reset" component={ PasswordReset } />
-      <Route path="/verify" component={ EmailVerify } />
-    </div>
+    <Switch>
+      <Route path="/signin" component={ SignIn }/>
+      <Route path="/signup" component={ SignUp }/>
+      <Route path="/reset" component={ PasswordReset }/>
+      <Route path="/verify" component={ EmailVerify }/>
+      <Route path="/workspace" component={ Workspace }/>
+      <Route path="/settings" component={ Settings }/>
+      <Route path="/" exact component={ Landing }/>
+      <Route component={ NotFound }/>
+    </Switch>
   </BrowserRouter>,
   document.getElementById('root')
 );

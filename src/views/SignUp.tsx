@@ -14,10 +14,8 @@ class SignUp extends React.Component<any, FormState> {
   }
   handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const form = event.target as HTMLFormElement,
       email = form.email.value, password = form.password.value;
-    
     fetch('http://api.arifulrigan.com/api/signup', { method: 'POST', body: JSON.stringify({email, password})})
       .then(resp => resp.ok ? this.props.history.push("/") : this.handleErrors(resp));
   }

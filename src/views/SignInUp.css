@@ -5,7 +5,6 @@
   margin: auto;
 }
 
-
 .SignInUp form {
   width: 400px;
   margin: 5vh auto;
@@ -103,13 +102,15 @@
   box-shadow: rgba(235, 87, 87, 0.7) 0px 0px 0px 1px inset, rgba(235, 87, 87, 0.4) 0px 0px 0px 2px !important;
 }
 
-.SignInUp .titlebar {
-  position: absolute;
-  top: 0;
-  height: 1.5em;
-  width: 100vw;
-  background-color: white;
-  -webkit-user-select: none;
-  -webkit-app-region: drag;
+.SignInUp form input:-webkit-autofill::first-line {
+  font-size: 1rem;
+}
+
+.SignInUp form input:-webkit-autofill,
+.SignInUp form input:-webkit-autofill:hover, 
+.SignInUp form input:-webkit-autofill:focus, 
+.SignInUp form input:-webkit-autofill:active  {
+  transition-delay: 9999s;
+  transition-property: background-color, color;
 }
 

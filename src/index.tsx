@@ -14,21 +14,26 @@ import NotFound from "./views/NotFound";
 
 import * as serviceWorker from './serviceWorker';
 
+import { Provider } from "react-redux";
+import store from "./store";
+
 import { BrowserRouter, Route, Switch } from "react-router-dom";
 
 ReactDOM.render(
-  <BrowserRouter>
-    <Switch>
-      <Route path="/signin" component={ SignIn }/>
-      <Route path="/signup" component={ SignUp }/>
-      <Route path="/reset" component={ PasswordReset }/>
-      <Route path="/verify" component={ EmailVerify }/>
-      <Route path="/workspace" component={ Workspace }/>
-      <Route path="/settings" component={ Settings }/>
-      <Route path="/" exact component={ Landing }/>
-      <Route component={ NotFound }/>
-    </Switch>
-  </BrowserRouter>,
+  <Provider store={store}>
+    <BrowserRouter>
+      <Switch>
+        <Route path="/signin" component={ SignIn }/>
+        <Route path="/signup" component={ SignUp }/>
+        <Route path="/reset" component={ PasswordReset }/>
+        <Route path="/verify" component={ EmailVerify }/>
+        <Route path="/workspace" component={ Workspace }/>
+        <Route path="/settings" component={ Settings }/>
+        <Route path="/" exact component={ Landing }/>
+        <Route component={ NotFound }/>
+      </Switch>
+    </BrowserRouter>
+  </Provider>,
   document.getElementById('root')
 );
 

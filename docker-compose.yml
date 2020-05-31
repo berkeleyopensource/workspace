@@ -3,24 +3,22 @@ version: '3'
 services:
     postgres:
         container_name: postgres
-        env_file: 
-            ./database/.env
         build: ./database
         ports:
-            - "5432:5432"
+            - "5432:5432"    
+        env_file: 
+            ./database/.env                
 
     redis:
         container_name: redis
         restart:  on-failure
         image: redis
         ports:
-            - "6379:6379"
+            - "127.0.0.1:6379:6379"
 
     go:
         container_name: auth-service
         restart: on-failure
         build: ./auth-service
         ports:
-            - "80:80"
-        environment:
-            - REDIS_URL=redis://redis:6379
+            - "8080:8080"

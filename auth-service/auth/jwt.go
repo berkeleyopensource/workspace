@@ -16,7 +16,7 @@ var (
 type AuthClaims struct {
 	Email string
 	EmailVerified bool
-	SessionToken string
+	UserId string
 	jwt.StandardClaims
 }
 

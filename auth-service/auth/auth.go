@@ -55,10 +55,10 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var hashedPassword, sessionToken string
+	var hashedPassword, userId string
 	var verified bool
 
-	err = database.DB.QueryRow("select hashedPassword, sessionToken, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &sessionToken, &verified)
+	err = database.DB.QueryRow("select hashedPassword, userId, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &userId, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
@@ -82,7 +82,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	accessToken, err = setClaims(AuthClaims{
 		Email: credentials.Email,
 		EmailVerified: verified,
-		SessionToken: sessionToken,
+		UserId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -105,7 +105,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
-		SessionToken: sessionToken,
+		UsedId: userIdv,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "refresh", 
 			ExpiresAt: refreshExpiresAt.Unix(),
@@ -154,13 +154,13 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a new random session token
-	sessionToken := uuid.New().String();
+	userId := uuid.New().String();
 
 	// Create a new verification token
 	verifyToken := getRandomBase62(tokenSize)
 
 	// Store credentials in database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, sessionToken, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), sessionToken, verifyToken)
+	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, userId, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), userId, verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -173,7 +173,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	accessToken, err = setClaims(AuthClaims{
 		Email: credentials.Email,
 		EmailVerified: false,
-		SessionToken: sessionToken,
+		UsedId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -196,7 +196,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
-		SessionToken: sessionToken,
+		UsedId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "refresh", 
 			ExpiresAt: refreshExpiresAt.Unix(),
@@ -272,9 +272,9 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		hashedResetToken := sha256.Sum256([]byte(credentials.Token))
 		stringHashed := string(hashedResetToken[:])
 
-		//  Get the sessionToken associated with the reset token.
-		var sessionToken string	
-		err = database.DB.QueryRow("SELECT sessionToken from users where resetToken=$1", stringHashed).Scan(&sessionToken)
+		//  Get the userId associated with the reset token.
+		var userId string	
+		err = database.DB.QueryRow("SELECT userId from users where resetToken=$1", stringHashed).Scan(&userId)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -285,8 +285,8 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			return
 		}		
 
-		// Add sessionToken to list of revoked tokens.
-		err = setRevokedItem(sessionToken, RevokedItem{ Invalid: true, IssuedAt: time.Now().Unix() })
+		// Add userId to list of revoked tokens.
+		err = setRevokedItem(userId, RevokedItem{ Invalid: true, IssuedAt: time.Now().Unix() })
 		if err != nil {
 			http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -343,8 +343,8 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	// Verify user account
 	} else {
 
-		var email, sessionToken string	
-		err = database.DB.QueryRow("SELECT email, sessionToken from users where verifiedToken=$1", credentials.Token).Scan(&email, &sessionToken)
+		var email, userId string	
+		err = database.DB.QueryRow("SELECT email, userId from users where verifiedToken=$1", credentials.Token).Scan(&email, &userId)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
@@ -371,7 +371,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		accessToken, err = setClaims(AuthClaims{
 			Email: email,
 			EmailVerified: true,
-			SessionToken: sessionToken,
+			userId: userId,
 			StandardClaims: jwt.StandardClaims{
 				Subject: "access", 
 				ExpiresAt: accessExpiresAt.Unix(),
@@ -385,7 +385,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update list of stale tokens
-		err = setRevokedItem(sessionToken, RevokedItem{ NewClaims: accessToken, IssuedAt: time.Now().Unix() })
+		err = setRevokedItem(userId, RevokedItem{ NewClaims: accessToken, IssuedAt: time.Now().Unix() })
 		if err != nil {
 			log.Print(err.Error())
 			return
@@ -412,7 +412,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Check if refreshToken has been revoked and invalidated.
 	var revoked RevokedItem
-	err = getRevokedItem(claims.SessionToken, revoked)
+	err = getRevokedItem(claims.UserId, revoked)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return

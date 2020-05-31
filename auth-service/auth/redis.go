@@ -1,7 +1,6 @@
 package auth 
 
 import (
-	"os"
 	"time"
 	"encoding/json"
 	"github.com/gomodule/redigo/redis"
@@ -20,11 +19,11 @@ var pool *redis.Pool
 func init() {
 	pool = &redis.Pool{MaxIdle: 10, IdleTimeout: 240 * time.Second, 
 		Dial: func() (redis.Conn, error) {
-			conn, err := redis.Dial("tcp", os.Getenv("REDIS_URL"))
+			conn, err := redis.Dial("tcp", "localhost:6379")
 			// Exponential backoff if unsuccessful connection.
 			for retries := 0; err != nil && retries < 5; retries++ {
 				time.Sleep((50 << retries) * time.Millisecond)
-				conn, err = redis.Dial("tcp", "redis:6379")
+				conn, err = redis.Dial("tcp", "localhost:6379")
 			}
 			return conn, err
 		},

@@ -39,7 +39,7 @@ func main() {
 	}
 
 	// Start the server
-	http.ListenAndServe(":80", router)
+	http.ListenAndServe(":8080", router)
 }
 
 func initDB() error {
@@ -48,7 +48,7 @@ func initDB() error {
 		host     = "postgres"
 		port     = 5432
 		user     = "postgres"
-		password = os.Getenv("DB_PASSWORD")
+		password = os.Getenv("POSTGRES_PASSWORD")
 		dbname   = "auth"
 		err      error
 		tries    = 0
@@ -81,8 +81,10 @@ func initDB() error {
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers:", "*")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		w.Header().Set("Access-Control-Allow-Methods", "*")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		log.Print(r.Header.Get("Origin"))
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 		} else {

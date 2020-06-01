@@ -19,10 +19,10 @@ var (
 )
 
 func init() {
-	// Load sendgrid credentials
+	// initialize environmental variables
 	err := godotenv.Load()
 	if err != nil {
-		log.Print(err.Error())
+		log.Fatal(err.Error())
 	}
 	sendgridKey = os.Getenv("SENDGRID_KEY")
 	sendgridClient = sendgrid.NewSendClient(sendgridKey)	

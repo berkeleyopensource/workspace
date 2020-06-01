@@ -10,7 +10,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/berkeleyopensource/workspace/auth-service/database"
 	"github.com/google/uuid"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
@@ -58,7 +57,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	var hashedPassword, userId string
 	var verified bool
 
-	err = database.DB.QueryRow("select hashedPassword, userId, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &userId, &verified)
+	err = db.QueryRow("select hashedPassword, userId, verified from users where email=$1", credentials.Email).Scan(&hashedPassword, &userId, &verified)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, errors.New("This email is not associated with an account.").Error(), http.StatusNotFound)
@@ -105,7 +104,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
-		UsedId: userIdv,
+		UserId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "refresh", 
 			ExpiresAt: refreshExpiresAt.Unix(),
@@ -138,11 +137,16 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if email exists
-	rows := database.DB.QueryRow("SELECT email FROM users WHERE email = $1", credentials.Email)
-	var email string
-	if err = rows.Scan(&email); err != sql.ErrNoRows {
-		http.Error(w, errors.New("This email is already associated with an account.").Error(), http.StatusConflict)
+	var exists bool
+	err = db.QueryRow("SELECT EXISTS (SELECT email FROM users WHERE email = $1)", credentials.Email).Scan(&exists)
+	if err != nil {
+		http.Error(w, errors.New("Error checking if email exists.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())		
 		return
+	}
+	if exists == true {
+		http.Error(w, errors.New("This email is already associated with an account.").Error(), http.StatusConflict)
+		return		
 	}
 
 	// Hash the password using bcrypt
@@ -153,14 +157,14 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create a new random session token
+	// Create a new random userId
 	userId := uuid.New().String();
 
 	// Create a new verification token
 	verifyToken := getRandomBase62(tokenSize)
 
 	// Store credentials in database
-	_, err = database.DB.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, userId, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), userId, verifyToken)
+	_, err = db.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, userId, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), userId, verifyToken)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -173,7 +177,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	accessToken, err = setClaims(AuthClaims{
 		Email: credentials.Email,
 		EmailVerified: false,
-		UsedId: userId,
+		UserId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -196,7 +200,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
-		UsedId: userId,
+		UserId: userId,
 		StandardClaims: jwt.StandardClaims{
 			Subject: "refresh", 
 			ExpiresAt: refreshExpiresAt.Unix(),
@@ -247,7 +251,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		stringHashed := string(hashedResetToken[:])
 
 		// Store the hashed reset token in database
-		_, err = database.DB.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", stringHashed, credentials.Email)
+		_, err = db.Exec("UPDATE users SET resetToken=$1 WHERE email=$2", stringHashed, credentials.Email)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
@@ -274,7 +278,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 
 		//  Get the userId associated with the reset token.
 		var userId string	
-		err = database.DB.QueryRow("SELECT userId from users where resetToken=$1", stringHashed).Scan(&userId)
+		err = db.QueryRow("SELECT userId from users where resetToken=$1", stringHashed).Scan(&userId)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -302,7 +306,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update the password field and remove reset token to prevent invalid re-use
-		_, err = database.DB.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, nil, stringHashed)
+		_, err = db.Exec("UPDATE users SET hashedPassword=$1, resetToken=$2 WHERE resetToken=$3", hashedPassword, nil, stringHashed)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("This resetToken is not associated with an account.").Error(), http.StatusNotFound)
@@ -334,7 +338,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	// Delete account if invalid field is true
 	if credentials.Invalid {
 
-		_, err := database.DB.Exec("DELETE FROM users WHERE verifiedToken=$1", credentials.Token)
+		_, err := db.Exec("DELETE FROM users WHERE verifiedToken=$1", credentials.Token)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -344,7 +348,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	} else {
 
 		var email, userId string	
-		err = database.DB.QueryRow("SELECT email, userId from users where verifiedToken=$1", credentials.Token).Scan(&email, &userId)
+		err = db.QueryRow("SELECT email, userId from users where verifiedToken=$1", credentials.Token).Scan(&email, &userId)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
@@ -355,7 +359,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}	
 
-		_, err := database.DB.Exec("UPDATE users SET verified=$1, verifiedToken=$2 WHERE verifiedToken=$3", true, "", credentials.Token)
+		_, err := db.Exec("UPDATE users SET verified=$1, verifiedToken=$2 WHERE verifiedToken=$3", true, "", credentials.Token)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				http.Error(w, errors.New("No account is associated with this token.").Error(), http.StatusNotFound)
@@ -371,7 +375,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		accessToken, err = setClaims(AuthClaims{
 			Email: email,
 			EmailVerified: true,
-			userId: userId,
+			UserId: userId,
 			StandardClaims: jwt.StandardClaims{
 				Subject: "access", 
 				ExpiresAt: accessExpiresAt.Unix(),

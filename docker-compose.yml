@@ -3,22 +3,35 @@ version: '3'
 services:
     postgres:
         container_name: postgres
-        build: ./database
+        image: postgres:latest  
+        restart:  on-failure        
         ports:
             - "5432:5432"    
-        env_file: 
-            ./database/.env                
+        environment:
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD} 
+            - POSTGRES_DB=auth
+
 
     redis:
+        image: redis
         container_name: redis
         restart:  on-failure
-        image: redis
         ports:
             - "127.0.0.1:6379:6379"
 
-    go:
+    auth:
         container_name: auth-service
-        restart: on-failure
         build: ./auth-service
+        restart: on-failure
         ports:
             - "8080:8080"
+        depends_on:
+            - postgres
+            - redis
+
+    #resource:
+    #    container_name: resource-service
+    #    restart: on-failure
+    #    build: ./resource-service
+    #    ports:
+    #        - "8484:8484"       

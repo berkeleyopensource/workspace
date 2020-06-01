@@ -1,4 +1,4 @@
-package auth 
+package resource 
 
 import (
 	"time"
@@ -59,17 +59,3 @@ func getRevokedItem(key string, val RevokedItem) error {
 	}
 	return json.Unmarshal(resp, val)
 }
-
-func setRevokedItem(key string, val RevokedItem) error {
-	// Fetch redis connection from pool and close after function exit.
-	conn := pool.Get()
-	defer conn.Close()
-
-	resp, err := json.Marshal(val)
-	if err != nil {
-		return err
-	}
-	_, err = conn.Do("SETEX", key, RevokedItemExpiry(val), resp)
-	return err
-}
-

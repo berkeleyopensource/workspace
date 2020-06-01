@@ -131,7 +131,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error decoding json credentials.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -166,7 +166,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	// Store credentials in database
 	_, err = db.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, userId, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), userId, verifyToken)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("Error storing credentials into database.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -290,7 +290,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		}		
 
 		// Add userId to list of revoked tokens.
-		err = setRevokedItem(userId, RevokedItem{ Invalid: true, IssuedAt: time.Now().Unix() })
+		err = setRevokedItem(userId, RevokedItem{ Invalid: true, InvalidIssuedAt: time.Now().Unix() })
 		if err != nil {
 			http.Error(w, errors.New("Error retrieving information with this resetToken.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
@@ -389,7 +389,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update list of stale tokens
-		err = setRevokedItem(userId, RevokedItem{ NewClaims: accessToken, IssuedAt: time.Now().Unix() })
+		err = setRevokedItem(userId, RevokedItem{ NewClaims: accessToken, NewClaimsIssuedAt: time.Now().Unix() })
 		if err != nil {
 			log.Print(err.Error())
 			return
@@ -423,7 +423,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Clear cookies if refreshToken has been revoked.
-	if (revoked != RevokedItem{} && claims.StandardClaims.IssuedAt < revoked.IssuedAt && revoked.Invalid == true) {
+	if (revoked != RevokedItem{} && revoked.Invalid == true && claims.StandardClaims.IssuedAt < revoked.InvalidIssuedAt) {
 		var expiresAt = time.Now().Add(-1 * time.Second)
 		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
 		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
@@ -443,7 +443,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Check if accessToken has stale claims that can be updated from cache.
 	oldAccessToken := accessCookie.Value
-	if (revoked != RevokedItem{} && claims.StandardClaims.IssuedAt < revoked.IssuedAt && revoked.NewClaims != "") {
+	if (revoked != RevokedItem{} && revoked.NewClaims != "" && claims.StandardClaims.IssuedAt < revoked.NewClaimsIssuedAt) {
 		oldAccessToken = revoked.NewClaims
 	}
 

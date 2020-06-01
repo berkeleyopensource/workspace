@@ -44,20 +44,4 @@ func init() {
 	} else {
 		log.Print("Connected to postgres.")
 	}
-	
-	_, err = db.Exec(`CREATE TABLE users (
-		email VARCHAR(320),
-		hashedPassword TEXT,
-		verified boolean,
-		resetToken bytea,
-		verifiedToken TEXT,
-		userId uuid
-	)`)
-
-	if err != nil {
-		log.Print("Error creating users table.")
-		log.Print(err.Error())
-	} else {
-		log.Print("Table users successfully created.")
-	}
 }

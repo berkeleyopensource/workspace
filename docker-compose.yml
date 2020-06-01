@@ -9,8 +9,8 @@ services:
             - "5432:5432"    
         environment:
             - POSTGRES_PASSWORD=${POSTGRES_PASSWORD} 
-            - POSTGRES_DB=auth
-
+        volumes:
+            - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
     redis:
         image: redis
@@ -25,9 +25,7 @@ services:
         restart: on-failure
         ports:
             - "8080:8080"
-        depends_on:
-            - postgres
-            - redis
+        command: bash -c 'while !</dev/tcp/postgres/5432; do sleep 1; done; npm start'
 
     #resource:
     #    container_name: resource-service

@@ -37,11 +37,11 @@ var pool *redis.Pool
 func init() {
 	pool = &redis.Pool{MaxIdle: 10, IdleTimeout: 240 * time.Second, 
 		Dial: func() (redis.Conn, error) {
-			conn, err := redis.Dial("tcp", "localhost:6379")
+			conn, err := redis.Dial("tcp", "redis:6379")
 			// Exponential backoff if unsuccessful connection.
 			for retries := 0; err != nil && retries < 5; retries++ {
 				time.Sleep((50 << retries) * time.Millisecond)
-				conn, err = redis.Dial("tcp", "localhost:6379")
+				conn, err = redis.Dial("tcp", "redis:6379")
 			}
 			return conn, err
 		},
@@ -53,11 +53,14 @@ func getRevokedItem(key string, val RevokedItem) error {
 	conn := pool.Get()
 	defer conn.Close()
 
+	var resp []byte
 	resp, err := redis.Bytes(conn.Do("GET", key))
-	if err != nil {
+	if err == redis.ErrNil {
+		return nil // Can't unmarshal nil resp so return unmodified val.
+	} else if err != nil {
 		return err
 	}
-	return json.Unmarshal(resp, val)
+	return json.Unmarshal(resp, &val)
 }
 
 func setRevokedItem(key string, val RevokedItem) error {

@@ -31,7 +31,7 @@ func setClaims(claims AuthClaims) (tokenString string, Error error) {
 
 func getClaims(tokenString string) (claims AuthClaims, Error error) {
 	claims = AuthClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
 	if err != nil {

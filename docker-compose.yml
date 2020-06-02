@@ -4,9 +4,7 @@ services:
     postgres:
         container_name: postgres
         image: postgres:latest  
-        restart:  on-failure        
-        ports:
-            - "5432:5432"    
+        restart:  on-failure         
         environment:
             - POSTGRES_PASSWORD=${POSTGRES_PASSWORD} 
         volumes:
@@ -16,8 +14,6 @@ services:
         image: redis
         container_name: redis
         restart:  on-failure
-        ports:
-            - "127.0.0.1:6379:6379"
 
     auth:
         container_name: auth-service

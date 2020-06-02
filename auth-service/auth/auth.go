@@ -416,7 +416,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Check if refreshToken has been revoked and invalidated.
 	var revoked RevokedItem
-	err = getRevokedItem(claims.UserId, revoked)
+	err = getRevokedItem(claims.UserId, &revoked)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return

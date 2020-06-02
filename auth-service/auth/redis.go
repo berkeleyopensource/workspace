@@ -48,7 +48,7 @@ func init() {
 	}
 }
 
-func getRevokedItem(key string, val RevokedItem) error {
+func getRevokedItem(key string, val*RevokedItem) error {
 	// Fetch redis connection from pool and close after function exit.
 	conn := pool.Get()
 	defer conn.Close()

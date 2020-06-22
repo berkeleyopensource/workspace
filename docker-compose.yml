@@ -29,7 +29,7 @@ services:
     hasura:
         container_name: hasura
         image: hasura/graphql-engine:latest
-        ports:
+        ports: # expose hasura default port 8080 on port 8484
             - "8484:8080"
         depends_on:
             - "postgres"
@@ -38,6 +38,7 @@ services:
             HASURA_GRAPHQL_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres
             HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
             HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
+            HASURA_GRAPHQL_UNAUTHORIZED_ROLE: "public"
 
     #resource:
     #    container_name: resource-service

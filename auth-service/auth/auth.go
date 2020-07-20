@@ -32,6 +32,7 @@ func getRandomBase62(length int) string {
 func RegisterRoutes(router *mux.Router) error {
 	router.HandleFunc("/api/signin", handleSignIn).Methods(http.MethodPost)
 	router.HandleFunc("/api/signup", handleSignUp).Methods(http.MethodPost)
+	router.HandleFunc("/api/logout", handleLogout).Methods(http.MethodPost)
 	router.HandleFunc("/api/reset", handlePasswordReset).Methods(http.MethodPost)
 	router.HandleFunc("/api/verify", handleEmailVerify).Methods(http.MethodPost)
 	router.HandleFunc("/api/refresh", handleTokenRefresh).Methods(http.MethodPost)
@@ -231,6 +232,13 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	var expiresAt = time.Now().Add(-1 * time.Minute)
+	http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
+	http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
+	return
+}
+
 func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
@@ -424,7 +432,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Clear cookies if refreshToken has been revoked.
 	if (revoked != RevokedItem{} && revoked.Invalid == true && claims.StandardClaims.IssuedAt < revoked.InvalidIssuedAt) {
-		var expiresAt = time.Now().Add(-1 * time.Second)
+		var expiresAt = time.Now().Add(-1 * time.Minute)
 		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
 		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
 		http.Error(w, errors.New("The refreshToken has been revoked.").Error(), http.StatusUnauthorized)

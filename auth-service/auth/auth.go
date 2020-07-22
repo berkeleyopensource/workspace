@@ -432,9 +432,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 
 	// Clear cookies if refreshToken has been revoked.
 	if (revoked != RevokedItem{} && revoked.Invalid == true && claims.StandardClaims.IssuedAt < revoked.InvalidIssuedAt) {
-		var expiresAt = time.Now().Add(-1 * time.Minute)
-		http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
-		http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
+		handleLogout(w, r)
 		http.Error(w, errors.New("The refreshToken has been revoked.").Error(), http.StatusUnauthorized)
 		return		
 	}

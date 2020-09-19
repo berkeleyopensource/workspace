@@ -96,9 +96,12 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
+		Name: "accessToken",
 		Value: accessToken,
 		Expires: accessExpiresAt,
+		Secure: true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	// Set refresh token as a cookie.
@@ -120,9 +123,12 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
+		Name: "refreshToken",
 		Value: refreshToken,
 		Expires: refreshExpiresAt,
+		Secure: true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	return
@@ -192,9 +198,12 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
+		Name: "accessToken",
 		Value: accessToken,
 		Expires: accessExpiresAt,
+		Secure: true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	// Set refresh token as a cookie.
@@ -216,9 +225,12 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: "refresh_token",
+		Name: "refreshToken",
 		Value: refreshToken,
 		Expires: refreshExpiresAt,
+		Secure: true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	// Send verification email
@@ -234,8 +246,8 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	var expiresAt = time.Now().Add(-1 * time.Minute)
-	http.SetCookie(w, &http.Cookie{ Name: "access_token",  Value: "", Expires: expiresAt})
-	http.SetCookie(w, &http.Cookie{ Name: "refresh_token", Value: "", Expires: expiresAt})
+	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
 	return
 }
 
@@ -406,7 +418,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
-	refreshCookie, err := r.Cookie("refresh_token")
+	refreshCookie, err := r.Cookie("refreshToken")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -437,7 +449,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		return		
 	}
 
-	accessCookie, err := r.Cookie("access_token")
+	accessCookie, err := r.Cookie("accessToken")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
 			http.Error(w, errors.New("Error there is no cookie.").Error(), http.StatusUnauthorized)
@@ -471,9 +483,12 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: "access_token",
+		Name: "accessToken",
 		Value: accessToken,
 		Expires: accessExpiresAt,
+		Secure: true,
+		HttpOnly: true,
+		SameSite: http.SameSiteNoneMode,
 	})
 
 	return

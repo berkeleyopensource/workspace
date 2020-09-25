@@ -96,7 +96,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("ServerError: Error creating accessToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -123,7 +123,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("ServerError: Error creating refreshToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -206,7 +206,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("ServerError: Error creating accessToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -233,7 +233,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
-		http.Error(w, errors.New("Error creating refreshToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("ServerError: Error creating refreshToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
 	}
@@ -500,7 +500,8 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	var accessToken string
 	accessToken, err = setClaims(claims)
 	if err != nil {
-		http.Error(w, errors.New("Error creating accessToken.").Error(), http.StatusInternalServerError)
+		http.Error(w, errors.New("ServerError: Error creating accessToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 	http.SetCookie(w, &http.Cookie{

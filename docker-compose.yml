@@ -39,6 +39,7 @@ services:
             HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
             HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
             HASURA_GRAPHQL_UNAUTHORIZED_ROLE: "public"
+            HASURA_GRAPHQL_JWT_SECRET: ${HASURA_GRAPHQL_JWT_SECRET}
 
     #resource:
     #    container_name: resource-service

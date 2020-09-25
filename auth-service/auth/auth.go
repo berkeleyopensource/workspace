@@ -83,6 +83,11 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: verified,
 		UserId: userId,
+		Hasura: map[string]interface{} {
+			"x-hasura-default-role": "user",
+			"x-hasura-allowed-roles": []string{"user"},
+			"x-hasura-user-id": userId,
+		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -130,6 +135,9 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteNoneMode,
 	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string] string{"userId": userId})
 
 	return
 }
@@ -185,6 +193,11 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: false,
 		UserId: userId,
+		Hasura: map[string]interface{} {
+			"x-hasura-default-role": "user",
+			"x-hasura-allowed-roles": []string{"user"},
+			"x-hasura-user-id": userId,
+		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -240,6 +253,9 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		log.Print(err.Error())
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string] string{"userId": userId})
 	
 	return
 }
@@ -396,6 +412,11 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 			Email: email,
 			EmailVerified: true,
 			UserId: userId,
+			Hasura: map[string]interface{} {
+				"x-hasura-default-role": "user",
+				"x-hasura-allowed-roles": []string{"user"},
+				"x-hasura-user-id": userId,
+			},
 			StandardClaims: jwt.StandardClaims{
 				Subject: "access", 
 				ExpiresAt: accessExpiresAt.Unix(),
@@ -490,6 +511,9 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteNoneMode,
 	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId})
 
 	return
 }

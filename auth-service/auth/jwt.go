@@ -19,7 +19,7 @@ var (
 
 func init() {
 
-	privateBytes, err := ioutil.ReadFile("jwtRS256.rsa")
+	privateBytes, err := ioutil.ReadFile("private.pem")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -29,7 +29,7 @@ func init() {
 		log.Fatal(err.Error())
 	}
 
-	publicBytes,  err := ioutil.ReadFile("jwtRS256.rsa.pub")
+	publicBytes,  err := ioutil.ReadFile("public.pem")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -45,7 +45,6 @@ type AuthClaims struct {
 	Email string
 	EmailVerified bool
 	UserId string
-	Hasura map[string]interface{} `json:"https://hasura.io/jwt/claims"`
 	jwt.StandardClaims
 }
 

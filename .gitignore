@@ -1,3 +1,5 @@
 **.env
 postgres-data/*
 redis-data/*
+auth-service/private.pem 
+auth-service/public.pem

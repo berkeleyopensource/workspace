@@ -33,9 +33,10 @@ func RegisterRoutes(router *mux.Router) error {
 	router.HandleFunc("/api/signin", handleSignIn).Methods(http.MethodPost)
 	router.HandleFunc("/api/signup", handleSignUp).Methods(http.MethodPost)
 	router.HandleFunc("/api/logout", handleLogout).Methods(http.MethodPost)
-	router.HandleFunc("/api/reset", handlePasswordReset).Methods(http.MethodPost)
-	router.HandleFunc("/api/verify", handleEmailVerify).Methods(http.MethodPost)
-	router.HandleFunc("/api/refresh", handleTokenRefresh).Methods(http.MethodPost)
+	router.HandleFunc("/api/verify", handleVerify).Methods(http.MethodPost)
+	router.HandleFunc("/api/reset", handleReset).Methods(http.MethodPost)
+	router.HandleFunc("/api/refresh", handleRefresh).Methods(http.MethodPost)
+	router.HandleFunc("/api/webhook", handleWebhook).Methods(http.MethodPost)
 	return nil
 }
 
@@ -83,11 +84,6 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: verified,
 		UserId: userId,
-		Hasura: map[string]interface{} {
-			"x-hasura-default-role": "user",
-			"x-hasura-allowed-roles": []string{"user"},
-			"x-hasura-user-id": userId,
-		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -103,6 +99,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "accessToken",
 		Value: accessToken,
+		Path: "/",
 		Expires: accessExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -130,6 +127,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
+		Path: "/",
 		Expires: refreshExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -137,7 +135,11 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string] string{"userId": userId})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())	
+	}
 
 	return
 }
@@ -193,11 +195,6 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: false,
 		UserId: userId,
-		Hasura: map[string]interface{} {
-			"x-hasura-default-role": "user",
-			"x-hasura-allowed-roles": []string{"user"},
-			"x-hasura-user-id": userId,
-		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -213,6 +210,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "accessToken",
 		Value: accessToken,
+		Path: "/",
 		Expires: accessExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -240,6 +238,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
+		Path: "/",
 		Expires: refreshExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -255,19 +254,23 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string] string{"userId": userId})
-	
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())	
+	}
+
 	return
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	var expiresAt = time.Now().Add(-1 * time.Minute)
-	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
-	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Path: "/", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Path: "/", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
 	return
 }
 
-func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
+func handleReset(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
@@ -362,7 +365,7 @@ func handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
+func handleVerify(w http.ResponseWriter, r *http.Request) {
 	credentials := Credentials{}
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
@@ -412,11 +415,6 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 			Email: email,
 			EmailVerified: true,
 			UserId: userId,
-			Hasura: map[string]interface{} {
-				"x-hasura-default-role": "user",
-				"x-hasura-allowed-roles": []string{"user"},
-				"x-hasura-user-id": userId,
-			},
 			StandardClaims: jwt.StandardClaims{
 				Subject: "access", 
 				ExpiresAt: accessExpiresAt.Unix(),
@@ -438,7 +436,7 @@ func handleEmailVerify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
+func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	refreshCookie, err := r.Cookie("refreshToken")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
@@ -507,6 +505,7 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "accessToken",
 		Value: accessToken,
+		Path: "/",
 		Expires: accessExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -514,7 +513,71 @@ func handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId})
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
+	}
+
+	return
+}
+
+func handleWebhook(w http.ResponseWriter, r *http.Request) {
+
+	accessCookie, err := r.Cookie("accessToken")
+	if err != nil {
+		if (err == http.ErrNoCookie) {
+
+			w.Header().Set("Content-Type", "application/json")
+			err = json.NewEncoder(w).Encode(map[string] interface{}{
+				"x-hasura-role": "public",
+			})
+			if err != nil {
+				http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
+				log.Print(err.Error())
+			}
+
+			log.Print("Request has no cookies.")
+
+			return
+
+		} else {
+			http.Error(w, errors.New("Error: internal server error from retrieving accessToken.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
+		}
+		return
+	}
+
+	claims, err := getClaims(accessCookie.Value)
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error from decoding accessToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
+		return
+	}
+
+	// Check if accessToken has stale claims and needs to be refreshed.
+	var revoked RevokedItem
+	err = getRevokedItem(claims.UserId, &revoked)
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error from validating accessToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
+		return
+	}
+	if (revoked != RevokedItem{} && revoked.NewClaims != "" && claims.StandardClaims.IssuedAt < revoked.NewClaimsIssuedAt) {
+		http.Error(w, errors.New("Error: accessToken is stale and requires refresh.").Error(), http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(map[string] interface{}{
+		"x-hasura-default-role": "user",
+		"x-hasura-allowed-roles": []string{"user"},
+		"x-hasura-user-id": claims.UserId,
+	})
+	if err != nil {
+		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
+	}
 
 	return
 }

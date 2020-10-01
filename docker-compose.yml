@@ -38,8 +38,8 @@ services:
             HASURA_GRAPHQL_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@postgres:5432/postgres
             HASURA_GRAPHQL_ENABLE_CONSOLE: "true"
             HASURA_GRAPHQL_ADMIN_SECRET: ${HASURA_GRAPHQL_ADMIN_SECRET}
-            HASURA_GRAPHQL_UNAUTHORIZED_ROLE: "public"
-            HASURA_GRAPHQL_JWT_SECRET: ${HASURA_GRAPHQL_JWT_SECRET}
+            HASURA_GRAPHQL_AUTH_HOOK: ${HASURA_GRAPHQL_AUTH_HOOK}
+            HASURA_GRAPHQL_AUTH_HOOK_MODE: ${HASURA_GRAPHQL_AUTH_HOOK_MODE}
 
     #resource:
     #    container_name: resource-service

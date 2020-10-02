@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"math/rand"
 	"errors"
+	"strings"
 	"encoding/json"
 	"crypto/sha256"
 	"database/sql"
@@ -13,10 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-)
-
-const (
-	tokenSize = 8;
 )
 
 func getRandomBase62(length int) string {
@@ -36,7 +33,7 @@ func RegisterRoutes(router *mux.Router) error {
 	router.HandleFunc("/api/verify", handleVerify).Methods(http.MethodPost)
 	router.HandleFunc("/api/reset", handleReset).Methods(http.MethodPost)
 	router.HandleFunc("/api/refresh", handleRefresh).Methods(http.MethodPost)
-	router.HandleFunc("/api/webhook", handleWebhook).Methods(http.MethodPost)
+	router.HandleFunc("/api/webhook", handleWebhook).Methods(http.MethodGet)
 	return nil
 }
 
@@ -84,6 +81,11 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: verified,
 		UserId: userId,
+		Hasura: map[string]interface{} {
+			"x-hasura-role": "user",
+			"x-hasura-allowed-roles": "user",
+			"x-hasura-user-id": userId,
+		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -127,7 +129,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
-		Path: "/",
+		Path: "/api/refresh",
 		Expires: refreshExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -135,7 +137,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId, "accessToken": accessToken})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())	
@@ -178,7 +180,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	userId := uuid.New().String();
 
 	// Create a new verification token
-	verifyToken := getRandomBase62(tokenSize)
+	verifyToken := getRandomBase62(8)
 
 	// Store credentials in database
 	_, err = db.Query("INSERT INTO users(email, hashedPassword, verified, resetToken, userId, verifiedToken) VALUES ($1, $2, FALSE, NULL, $3, $4)", credentials.Email, string(hashedPassword), userId, verifyToken)
@@ -195,6 +197,11 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		Email: credentials.Email,
 		EmailVerified: false,
 		UserId: userId,
+		Hasura: map[string]interface{} {
+			"x-hasura-role": "user",
+			"x-hasura-allowed-roles": "user",
+			"x-hasura-user-id": userId,
+		},
 		StandardClaims: jwt.StandardClaims{
 			Subject: "access", 
 			ExpiresAt: accessExpiresAt.Unix(),
@@ -238,7 +245,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
-		Path: "/",
+		Path: "/api/refresh",
 		Expires: refreshExpiresAt,
 		Secure: true,
 		HttpOnly: true,
@@ -254,7 +261,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId, "accessToken": accessToken})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())	
@@ -265,8 +272,8 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	var expiresAt = time.Now().Add(-1 * time.Minute)
-	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Path: "/", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
-	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Path: "/", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Path: "/",            Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Path: "/api/refresh", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
 	return
 }
 
@@ -283,7 +290,7 @@ func handleReset(w http.ResponseWriter, r *http.Request) {
 	if (credentials.Email != "" && credentials.Password == "") {
 
 		// Create a password reset token
-		resetToken := getRandomBase62(tokenSize)
+		resetToken := getRandomBase62(8)
 
 		// Hash the reset token using SHA-256
 		hashedResetToken := sha256.Sum256([]byte(resetToken))
@@ -415,6 +422,11 @@ func handleVerify(w http.ResponseWriter, r *http.Request) {
 			Email: email,
 			EmailVerified: true,
 			UserId: userId,
+			Hasura: map[string]interface{} {
+				"x-hasura-role": "user",
+				"x-hasura-allowed-roles": "user",
+				"x-hasura-user-id": userId,
+			},
 			StandardClaims: jwt.StandardClaims{
 				Subject: "access", 
 				ExpiresAt: accessExpiresAt.Unix(),
@@ -513,7 +525,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId, "accessToken": accessToken})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -523,32 +535,31 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
+	var accessToken string
 
-	accessCookie, err := r.Cookie("accessToken")
-	if err != nil {
-		if (err == http.ErrNoCookie) {
-
-			w.Header().Set("Content-Type", "application/json")
-			err = json.NewEncoder(w).Encode(map[string] interface{}{
-				"x-hasura-role": "public",
-			})
-			if err != nil {
-				http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
-				log.Print(err.Error())
-			}
-
-			log.Print("Request has no cookies.")
-
+	// Check authorization header for accessToken, else giving public role.
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" {
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, errors.New("Error: invalid bearer authorization header.").Error(), http.StatusUnauthorized)
 			return
-
-		} else {
-			http.Error(w, errors.New("Error: internal server error from retrieving accessToken.").Error(), http.StatusInternalServerError)
+		}
+		accessToken = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		log.Print("This request has authorization header: private role given.", r.Header)
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(map[string] interface{}{
+			"x-hasura-role": "public",
+		})
+		if err != nil {
+			http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
 		}
+		log.Print("This request has no authorization header: public role given.", r.Header)
 		return
 	}
 
-	claims, err := getClaims(accessCookie.Value)
+	claims, err := getClaims(accessToken)
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error from decoding accessToken.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -569,11 +580,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] interface{}{
-		"x-hasura-default-role": "user",
-		"x-hasura-allowed-roles": []string{"user"},
-		"x-hasura-user-id": claims.UserId,
-	})
+	err = json.NewEncoder(w).Encode(claims.Hasura)
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())

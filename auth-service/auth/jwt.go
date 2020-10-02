@@ -45,6 +45,7 @@ type AuthClaims struct {
 	Email string
 	EmailVerified bool
 	UserId string
+	Hasura map[string]interface{} `json:"https://hasura.io/jwt/claims"`
 	jwt.StandardClaims
 }
 

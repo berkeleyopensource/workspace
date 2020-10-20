@@ -109,7 +109,7 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Set refresh token as a cookie.
-	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var refreshExpiresAt = time.Now().Add(DefaultRefreshJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
 		UserId: userId,
@@ -225,7 +225,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Set refresh token as a cookie.
-	var refreshExpiresAt = time.Now().Add(DefaultAccessJWTExpiry)
+	var refreshExpiresAt = time.Now().Add(DefaultRefreshJWTExpiry)
 	var refreshToken string
 	refreshToken, err = setClaims(AuthClaims{
 		UserId: userId,

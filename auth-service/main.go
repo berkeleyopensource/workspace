@@ -5,12 +5,17 @@ import (
 	"net/http"
 	"github.com/berkeleyopensource/workspace/auth-service/auth"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/handlers"
 )
 
 func main() {
-	// Create a new mux router with CORS headers. 
 	router := mux.NewRouter()
+
+	// Create a new mux router with CORS headers. 
 	router.Use(CORS)
+
+	// Forward headers as we're using nginx to reverse proxy.
+	router.Use(handlers.ProxyHeaders)
 
 	// Initalize auth routes.
 	err := auth.RegisterRoutes(router)
@@ -28,7 +33,6 @@ func CORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
 		w.Header().Set("Access-Control-Allow-Methods", "*")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		log.Print(r.Header.Get("Origin"))
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 		} else {

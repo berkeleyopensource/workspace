@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"crypto/sha256"
 	"database/sql"
+	"os"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 	"github.com/google/uuid"
 	"github.com/dgrijalva/jwt-go"
@@ -27,13 +29,13 @@ func getRandomBase62(length int) string {
 }
 
 func RegisterRoutes(router *mux.Router) error {
-	router.HandleFunc("/api/signin", handleSignIn).Methods(http.MethodPost)
-	router.HandleFunc("/api/signup", handleSignUp).Methods(http.MethodPost)
-	router.HandleFunc("/api/logout", handleLogout).Methods(http.MethodPost)
-	router.HandleFunc("/api/verify", handleVerify).Methods(http.MethodPost)
-	router.HandleFunc("/api/reset", handleReset).Methods(http.MethodPost)
-	router.HandleFunc("/api/refresh", handleRefresh).Methods(http.MethodPost)
-	router.HandleFunc("/api/webhook", handleWebhook).Methods(http.MethodGet)
+	router.HandleFunc("/auth/signin", handleSignIn).Methods(http.MethodPost)
+	router.HandleFunc("/auth/signup", handleSignUp).Methods(http.MethodPost)
+	router.HandleFunc("/auth/logout", handleLogout).Methods(http.MethodPost)
+	router.HandleFunc("/auth/verify", handleVerify).Methods(http.MethodPost)
+	router.HandleFunc("/auth/reset", handleReset).Methods(http.MethodPost)
+	router.HandleFunc("/auth/refresh", handleRefresh).Methods(http.MethodPost)
+	router.HandleFunc("/auth/webhook", handleWebhook).Methods(http.MethodGet)
 	return nil
 }
 
@@ -42,6 +44,17 @@ type Credentials struct {
 	Password string `json:"password"`
 	Token    string `json:"token"`
 	Invalid  bool   `json:"invalid"`
+}
+
+var rootDomain string
+
+func init() {
+	// initialize environmental variables
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	rootDomain = os.Getenv("ROOT_DOMAIN")
 }
 
 func handleSignIn(w http.ResponseWriter, r *http.Request) {
@@ -98,14 +111,14 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 		log.Print(err.Error())
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: "accessToken",
-		Value: accessToken,
-		Path: "/",
-		Expires: accessExpiresAt,
-		Secure: true,
-		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+	http.SetCookie(w, &http.Cookie{ 
+		Name: "accessToken", 
+		Value: accessToken, 
+		Path: "/", 
+		Domain: rootDomain, 
+		Expires: accessExpiresAt, 
+		HttpOnly: true, 
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	// Set refresh token as a cookie.
@@ -129,15 +142,14 @@ func handleSignIn(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
-		Path: "/api/refresh",
+		Path: "/auth/refresh",
 		Expires: refreshExpiresAt,
-		Secure: true,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId, "accessToken": accessToken})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())	
@@ -218,10 +230,10 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 		Name: "accessToken",
 		Value: accessToken,
 		Path: "/",
+		Domain: rootDomain,
 		Expires: accessExpiresAt,
-		Secure: true,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	// Set refresh token as a cookie.
@@ -245,11 +257,10 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "refreshToken",
 		Value: refreshToken,
-		Path: "/api/refresh",
+		Path: "/auth/refresh",
 		Expires: refreshExpiresAt,
-		Secure: true,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
 	// Send verification email
@@ -261,7 +272,7 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId, "accessToken": accessToken})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": userId})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())	
@@ -272,8 +283,8 @@ func handleSignUp(w http.ResponseWriter, r *http.Request) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	var expiresAt = time.Now().Add(-1 * time.Minute)
-	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Path: "/",            Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
-	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Path: "/api/refresh", Expires: expiresAt, Secure: true, HttpOnly: true, SameSite: http.SameSiteNoneMode})
+	http.SetCookie(w, &http.Cookie{ Name: "accessToken",  Value: "", Path: "/", Domain: rootDomain, Expires: expiresAt, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{ Name: "refreshToken", Value: "", Path: "/auth/refresh", Expires: expiresAt, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	return
 }
 
@@ -449,6 +460,7 @@ func handleVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRefresh(w http.ResponseWriter, r *http.Request) {
+
 	refreshCookie, err := r.Cookie("refreshToken")
 	if err != nil {
 		if (err == http.ErrNoCookie) {
@@ -518,14 +530,16 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 		Name: "accessToken",
 		Value: accessToken,
 		Path: "/",
+		Domain: rootDomain,
 		Expires: accessExpiresAt,
-		Secure: true,
 		HttpOnly: true,
-		SameSite: http.SameSiteNoneMode,
+		SameSite: http.SameSiteStrictMode,
 	})
 
+	log.Print("request ", rootDomain, " ", r.Host, r.URL.Path, " ", r.URL)
+
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId, "accessToken": accessToken})
+	err = json.NewEncoder(w).Encode(map[string] string{"userId": claims.UserId})
 	if err != nil {
 		http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
@@ -537,7 +551,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	var accessToken string
 
-	// Check authorization header for accessToken, else giving public role.
+	// Check authorization header for accessToken.
 	authHeader := r.Header.Get("Authorization")
 	if authHeader != "" {
 		if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -545,17 +559,27 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		accessToken = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		log.Print("This request has authorization header: private role given.", r.Header)
-	} else {
+	}
+
+	// Check request cookies for accessToken.
+	accessCookie, err := r.Cookie("accessToken")
+	if err != nil && err != http.ErrNoCookie {
+		http.Error(w, errors.New("Error retrieving accessToken within cookie.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
+		return
+	} else if accessToken == "" {
+		accessToken = accessCookie.Value
+	}
+
+	// Give public role if no accessToken is found in either auth header or cookie.
+	if accessToken == "" {
 		w.Header().Set("Content-Type", "application/json")
-		err := json.NewEncoder(w).Encode(map[string] interface{}{
-			"x-hasura-role": "public",
-		})
+		err := json.NewEncoder(w).Encode(map[string] interface{}{"x-hasura-role": "public"})
 		if err != nil {
 			http.Error(w, errors.New("Error: interal server error creating json payload.").Error(), http.StatusInternalServerError)
 			log.Print(err.Error())
 		}
-		log.Print("This request has no authorization header: public role given.", r.Header)
+		log.Print("This request has auth header or cookie with accessToken: public role given.")
 		return
 	}
 

@@ -467,13 +467,15 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 		} else {
 			http.Error(w, errors.New("Error retrieving refreshToken.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 		}
 		return
 	}
 
 	claims, err := getClaims(refreshCookie.Value)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnauthorized)
+		http.Error(w, errors.New("Error retrieving refreshToken.").Error(), http.StatusInternalServerError)
+		log.Print(err.Error())
 		return
 	}
 
@@ -482,6 +484,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	err = getRevokedItem(claims.UserId, &revoked)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
+		log.Print(err.Error())
 		return
 	}
 
@@ -498,6 +501,7 @@ func handleRefresh(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, errors.New("Error there is no cookie.").Error(), http.StatusUnauthorized)
 		} else {
 			http.Error(w, errors.New("Error retrieving accessToken.").Error(), http.StatusInternalServerError)
+			log.Print(err.Error())
 		}
 		return
 	}
@@ -567,7 +571,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errors.New("Error retrieving accessToken within cookie.").Error(), http.StatusInternalServerError)
 		log.Print(err.Error())
 		return
-	} else if accessToken == "" {
+	} else if err == nil && accessToken == "" {
 		accessToken = accessCookie.Value
 	}
 
